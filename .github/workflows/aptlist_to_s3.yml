@@ -35,64 +35,25 @@ jobs:
           pip install playwright==1.47.0 pandas lxml
           python -m playwright install --with-deps chromium
 
-      - name: Download AptList CSV (headless; exact elements)
+      - name: Download AptList CSV (headless; script)
         run: |
           set -euo pipefail
           mkdir -p data
-          python - <<'PY'
-          import asyncio, re
-          from pathlib import Path
-          from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-
-          URL = "https://www.apartmentlist.com/research/category/data-rent-estimates"
-          OUT = Path("data/apartmentlist_raw.csv")
-
-          async def main():
-            async with async_playwright() as p:
-              b = await p.chromium.launch(headless=True)
-              ctx = await b.new_context(
-                accept_downloads=True,
-                user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) "
-                            "Chrome/123 Safari/537.36")
-              )
-              page = await ctx.new_page()
-              await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-
-              # Open dropdown and select: Historic Rent Estimates (Jan 2017 - Present)
-              try:
-                combo = page.locator("#mui-component-select-age")
-                await combo.click(force=True)
-                opt = page.get_by_role("option", name=re.compile(r"^Historic Rent Estimates", re.I))
-                await opt.click()
-              except Exception:
-                pass  # ok if already selected
-
-              # Click the Download button
-              btn = page.locator('button:has-text("Download")').first
-              if not await btn.count():
-                raise SystemExit("Download button not found")
-              async with page.expect_download(timeout=45000) as dl_info:
-                await btn.click()
-              dl = await dl_info.value
-              OUT.write_bytes(Path(await dl.path()).read_bytes())
-              print("Downloaded:", dl.suggested_filename)
-              await b.close()
-
-          asyncio.run(main())
-          PY
+          python scripts/download_apartmentlist.py \
+            --option "Historic Rent Estimates (Jan 2017 - Present)" \
+            --out data/apartmentlist_raw.csv
           head -n 2 data/apartmentlist_raw.csv
 
-      # --- Normalize to long schema ---
-      - name: Melt to long CSV (Python)
+      - name: Normalize to long schema
         run: |
+          set -euo pipefail
+          mkdir -p standardized   # <-- ensure dir exists
           python - <<'PY'
-          import re, pandas as pd
+          import re, pandas as pd, pathlib
           src = "data/apartmentlist_raw.csv"
-          dst = "standardized/apartmentlist_long.csv"
+          dst = pathlib.Path("standardized/apartmentlist_long.csv")
           df  = pd.read_csv(src)
           cols = [c.lower().strip() for c in df.columns]
-
           if 'month' in cols and 'rent_index' in cols:
               rename = {
                 'location name':'location_name','location':'location_name',
@@ -130,7 +91,7 @@ jobs:
                 'rent_index': long['rent_index'],
                 'month': long['month'],
               })
-
+          dst.parent.mkdir(parents=True, exist_ok=True)
           out.to_csv(dst, index=False)
           print("Wrote", dst, "rows:", len(out))
           PY
@@ -152,3 +113,14 @@ jobs:
         run: |
           TODAY=$(date -u +%F)
           aws s3 ls "s3://$BUCKET/aptlist/$TODAY/"
+
+      # --- Debug artifacts on failure ---
+      - name: Upload debug artifacts (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aptlist-debug
+          path: |
+            data/**
+            **/*.html
+            **/*.png

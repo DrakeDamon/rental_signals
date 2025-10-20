@@ -28,105 +28,97 @@ async def download_apartmentlist_csv(url: str, option_name: str, output_path: st
     """
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         async with async_playwright() as p:
-            print(f"Launching headless Chromium...")
             browser = await p.chromium.launch(headless=True)
-            
-            context = await browser.new_context(
+            ctx = await browser.new_context(
                 accept_downloads=True,
-                user_agent=(
-                    "Mozilla/5.0 (X11; Linux x86_64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/123.0.0.0 Safari/537.36"
-                )
+                user_agent=("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/123 Safari/537.36")
             )
-            
-            page = await context.new_page()
-            
+            page = await ctx.new_page()
+
+            # Fallback capture of CSV responses if Download event doesn't fire
+            csv_bytes = None
+            def on_response(resp):
+                nonlocal csv_bytes
+                ct = (resp.headers or {}).get("content-type", "").lower()
+                if ("text/csv" in ct) or resp.url.lower().endswith(".csv"):
+                    # best-effort; we'll still prefer the official download event
+                    try:
+                        csv_bytes = resp.body()
+                    except Exception:
+                        pass
+            page.on("response", on_response)
+
             print(f"Navigating to {url}")
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            
-            # Wait for page to be interactive
-            await page.wait_for_load_state("networkidle", timeout=30000)
-            
-            # Try to select the dropdown option
-            print(f"Looking for dropdown option: '{option_name}'")
+            await page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+            await page.wait_for_load_state("networkidle", timeout=30_000)
+
+            # --- Select dropdown option (try exact id first, then ARIA role) ---
+            print(f"Selecting option: {option_name}")
+            option_pattern = re.compile(
+                option_name.replace(" ", r"\s+").replace("-", r"[-–—]"), re.IGNORECASE
+            )
             try:
-                # Find and click the combobox
-                combo = page.get_by_role("combobox").first
-                await combo.wait_for(state="visible", timeout=10000)
-                await combo.click()
-                
-                # Look for the option with flexible matching
-                option_pattern = re.compile(
-                    option_name.replace(" ", r"\s+").replace("-", r"[-–—]"),
-                    re.IGNORECASE
-                )
-                
-                option = page.get_by_role("option", name=option_pattern)
-                if await option.count() > 0:
-                    print(f"Found and selecting option: '{option_name}'")
-                    await option.first.click()
+                combo = page.locator("#mui-component-select-age")
+                await combo.first.click(force=True, timeout=10_000)
+            except Exception:
+                try:
+                    combo = page.get_by_role("combobox").first
+                    await combo.click(timeout=10_000)
+                except Exception:
+                    pass
+
+            try:
+                opt = page.get_by_role("option", name=option_pattern)
+                if await opt.count() > 0:
+                    await opt.first.click()
                 else:
-                    print(f"Option '{option_name}' not found, checking if already selected...")
-                    # Check if the option is already selected by default
-                    current_value = await combo.inner_text()
-                    if option_pattern.search(current_value):
-                        print(f"Option already selected: '{current_value}'")
-                    else:
-                        print(f"Warning: Could not find or select option '{option_name}'")
-                        print(f"Current dropdown value: '{current_value}'")
-                        print("Proceeding with current selection...")
-                        
-            except PWTimeout:
-                print("Timeout selecting dropdown option, proceeding with default selection...")
-            except Exception as e:
-                print(f"Error selecting dropdown option: {e}")
-                print("Proceeding with current selection...")
-            
-            # Find and click the Download button
-            print("Looking for Download button...")
-            download_btn = page.get_by_role("button", name=re.compile(r"^Download$", re.I))
-            
-            if await download_btn.count() == 0:
+                    # if already selected, continue
+                    val = await combo.inner_text() if combo else ""
+                    if not option_pattern.search(val or ""):
+                        print("Warning: desired option not found/selected; continuing with current selection.")
+            except Exception:
+                pass
+
+            # --- Click Download ---
+            print("Clicking Download…")
+            btn = page.get_by_role("button", name=re.compile(r"^Download$", re.I)).first
+            if not await btn.count():
                 print("Error: Download button not found")
                 await browser.close()
                 return False
-            
-            print("Clicking Download button...")
-            
-            # Set up download handler and click
-            async with page.expect_download(timeout=45000) as download_info:
-                await download_btn.first.click()
-            
-            download = await download_info.value
-            
-            # Save the downloaded file
-            download_path = await download.path()
-            if download_path and Path(download_path).exists():
-                output_file.write_bytes(Path(download_path).read_bytes())
-                print(f"Successfully downloaded: {download.suggested_filename}")
-                print(f"Saved to: {output_file}")
-                
-                # Verify file was saved and has content
-                if output_file.exists() and output_file.stat().st_size > 0:
-                    print(f"File size: {output_file.stat().st_size:,} bytes")
+
+            # Prefer official file download event
+            try:
+                async with page.expect_download(timeout=45_000) as dl_info:
+                    await btn.click()
+                dl = await dl_info.value
+                path = await dl.path()
+                if path:
+                    output_file.write_bytes(Path(path).read_bytes())
+                    print(f"Downloaded via download event: {dl.suggested_filename}")
                     await browser.close()
                     return True
-                else:
-                    print("Error: Downloaded file is empty or missing")
-                    await browser.close()
-                    return False
-            else:
-                print("Error: Failed to get download path")
+            except PWTimeout:
+                print("Download event not seen; trying response-capture fallback…")
+
+            # Fallback: use captured CSV response
+            if csv_bytes:
+                # csv_bytes might be a coroutine (playwright>=1.47) — await if needed
+                if callable(getattr(csv_bytes, "__await__", None)):
+                    csv_bytes = await csv_bytes
+                output_file.write_bytes(csv_bytes)
+                print("Downloaded via response capture.")
                 await browser.close()
-                return False
-                
-    except PWTimeout as e:
-        print(f"Timeout error: {e}")
-        return False
+                return True
+
+            print("Error: Could not obtain CSV via download or response.")
+            await browser.close()
+            return False
+
     except Exception as e:
         print(f"Unexpected error: {e}")
         return False
