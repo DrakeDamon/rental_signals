@@ -1,0 +1,60 @@
+name: Update FRED series CSV to S3
+
+on:
+  schedule:
+    - cron: "0 10 * * *"   # daily at 10:00 UTC; adjust as you like
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: fred-upload
+      cancel-in-progress: false
+
+    steps:
+      - name: Assume AWS role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
+          aws-region: us-east-1
+
+      - name: Download FRED CSV
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FRED_SERIES_ID: ${{ vars.FRED_SERIES_ID }}
+        run: |
+          set -euo pipefail
+          : "${FRED_SERIES_ID:=CUSR0000SEHA}"  # SA Rent of Primary Residence (US city avg)
+          if [[ -z "${FRED_API_KEY:-}" ]]; then echo "Set FRED_API_KEY secret"; exit 1; fi
+          START="2015-01-01"
+          URL="https://api.stlouisfed.org/fred/series/observations?series_id=${FRED_SERIES_ID}&api_key=${FRED_API_KEY}&file_type=csv&observation_start=${START}"
+          mkdir -p data
+          curl -fsSL "$URL" -o data/fred_${FRED_SERIES_ID}.csv
+          head -n 2 data/fred_${FRED_SERIES_ID}.csv
+          wc -l data/fred_${FRED_SERIES_ID}.csv
+
+      - name: Upload to S3 (date-stamped prefix)
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+          FRED_SERIES_ID: ${{ vars.FRED_SERIES_ID }}
+        run: |
+          set -euo pipefail
+          : "${FRED_SERIES_ID:=CUSR0000SEHA}"
+          if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
+          TODAY=$(date -u +%F)
+          aws s3api put-object --bucket "$BUCKET" --key "fred/$TODAY/"
+          aws s3 cp "data/fred_${FRED_SERIES_ID}.csv" "s3://$BUCKET/fred/$TODAY/"
+
+      - name: Verify S3 upload
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+          FRED_SERIES_ID: ${{ vars.FRED_SERIES_ID }}
+        run: |
+          : "${FRED_SERIES_ID:=CUSR0000SEHA}"
+          TODAY=$(date -u +%F)
+          aws s3 ls "s3://$BUCKET/fred/$TODAY/"

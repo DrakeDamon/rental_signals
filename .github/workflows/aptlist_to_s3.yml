@@ -1,0 +1,59 @@
+name: Update Apartment List CSV to S3
+
+on:
+  schedule:
+    # 19th @ 09:20 UTC (their report usually lands mid-month)
+    - cron: "20 9 19 * *"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: aptlist-upload
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
+          aws-region: us-east-1
+
+      - name: Find latest Apartment List Rent Estimates CSV and download
+        run: |
+          set -euo pipefail
+          PAGE="https://www.apartmentlist.com/research/category/data-rent-estimates"
+          mkdir -p data
+          # Grab first CSV link on the page that looks like a rent-estimates file
+          URL=$(curl -fsSL "$PAGE" \
+            | grep -Eo 'https?://[^"]+rent[-_]estimates[^"]+\.csv' \
+            | head -n 1)
+          if [[ -z "${URL:-}" ]]; then echo "Could not find CSV link on $PAGE"; exit 1; fi
+          echo "Downloading $URL"
+          curl -fsSL "$URL" -o data/apartmentlist_rent_estimates.csv
+          head -n 2 data/apartmentlist_rent_estimates.csv
+          wc -l data/apartmentlist_rent_estimates.csv
+
+      - name: Upload to S3 (date-stamped prefix)
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
+          TODAY=$(date -u +%F)
+          aws s3api put-object --bucket "$BUCKET" --key "aptlist/$TODAY/"
+          aws s3 cp data/apartmentlist_rent_estimates.csv "s3://$BUCKET/aptlist/$TODAY/"
+
+      - name: Verify S3 upload
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+        run: |
+          TODAY=$(date -u +%F)
+          aws s3 ls "s3://$BUCKET/aptlist/$TODAY/"
