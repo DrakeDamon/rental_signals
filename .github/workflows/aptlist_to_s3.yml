@@ -41,42 +41,65 @@ jobs:
           pip install playwright==1.47.0 pandas
           python -m playwright install --with-deps chromium
 
-      - name: Download AptList CSV (headless)
+      - name: Download AptList CSV (headless; target specific elements)
         run: |
           set -euo pipefail
           mkdir -p data
           python - <<'PY'
           import asyncio, re
           from pathlib import Path
-          from playwright.async_api import async_playwright
+          from playwright.async_api import async_playwright, TimeoutError as PWTimeout
+
           URL = "https://www.apartmentlist.com/research/category/data-rent-estimates"
           OUT = Path("data/apartmentlist_raw.csv")
+          OPTION_TEXT = "Historic Rent Estimates (Jan 2017 - Present)"  # first dropdown option
+
           async def main():
             async with async_playwright() as p:
-              b = await p.chromium.launch(headless=True)
-              ctx = await b.new_context(accept_downloads=True,
-                                        user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
-                                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                                    "Chrome/123 Safari/537.36"))
+              browser = await p.chromium.launch(headless=True)
+              ctx = await browser.new_context(
+                accept_downloads=True,
+                user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/123 Safari/537.36")
+              )
               page = await ctx.new_page()
-              await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-              # select the first option: Historic Rent Estimates (Jan 2017 - Present)
+              await page.goto(URL, wait_until="domcontentloaded", timeout=60_000)
+
+              # --- Open dropdown and select the specific option ---
               try:
-                combo = page.get_by_role("combobox").first
-                await combo.click()
-                opt = page.get_by_role("option", name=re.compile(r"Historic Rent Estimates", re.I))
+                # Click the MUI select by its stable id you provided
+                combo = page.locator("#mui-component-select-age")
+                await combo.click(force=True)
+                # Select the option row by visible text (works even if listbox id is dynamic)
+                opt = page.get_by_role("option", name=re.compile(r"^Historic Rent Estimates", re.I))
                 await opt.click()
+              except PWTimeout:
+                pass  # if already selected, continue
               except Exception:
-                pass
-              btn = page.get_by_role("button", name=re.compile(r"^Download$", re.I))
-              if await btn.count()==0:
+                # Fallback: use ARIA role if id ever changes
+                try:
+                  c2 = page.get_by_role("combobox").first
+                  await c2.click()
+                  await page.get_by_role("option", name=re.compile(r"^Historic Rent Estimates", re.I)).click()
+                except Exception:
+                  pass  # don't fail just because it was preselected
+
+              # --- Click the exact Download button you showed ---
+              btn = page.locator('button:has-text("Download")').first
+              if not await btn.count():
                 raise SystemExit("Download button not found")
-              async with page.expect_download(timeout=45000) as dl_info:
-                await btn.first.click()
+
+              async with page.expect_download(timeout=45_000) as dl_info:
+                await btn.click()
+
               dl = await dl_info.value
-              OUT.write_bytes(Path(await dl.path()).read_bytes())
+              path = await dl.path()
+              OUT.write_bytes(Path(path).read_bytes())
               print("Downloaded:", dl.suggested_filename)
-              await b.close()
+
+              await browser.close()
+
           asyncio.run(main())
           PY
           head -n 2 data/apartmentlist_raw.csv
