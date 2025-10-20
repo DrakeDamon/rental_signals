@@ -1,0 +1,54 @@
+name: Update Zillow Metro CSV to S3
+
+on:
+  schedule:
+    # Run monthly, 09:15 UTC on the 18th (Zillow usually posts ~16th)
+    - cron: "15 9 18 * *"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # needed for OIDC
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: zori-metro-upload
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
+          aws-region: us-east-1
+
+      - name: Download Zillow Metro ZORI (wide CSV)
+        run: |
+          set -euo pipefail
+          URL="https://files.zillowstatic.com/research/public_csvs/zori/Metro_zori_uc_sfrcondomfr_sm_month.csv"
+          mkdir -p data
+          curl -fsSL "$URL" -o data/zori_metro_wide.csv
+          # quick sanity
+          head -n 2 data/zori_metro_wide.csv
+          wc -l data/zori_metro_wide.csv
+
+      - name: Upload to S3 (date-stamped prefix)
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
+          TODAY=$(date -u +%F)
+          aws s3api put-object --bucket "$BUCKET" --key "zillow/metro/$TODAY/"
+          aws s3 cp data/zori_metro_wide.csv "s3://$BUCKET/zillow/metro/$TODAY/"
+
+      - name: Verify S3 upload
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+        run: |
+          TODAY=$(date -u +%F)
+          aws s3 ls "s3://$BUCKET/zillow/metro/$TODAY/"
