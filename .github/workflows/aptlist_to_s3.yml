@@ -1,8 +1,8 @@
-name: Update Apartment List CSV to S3
+name: Update Apartment List CSV to S3 (Headless)
 
 on:
   schedule:
-    - cron: "20 9 19 * *"   # 09:20 UTC on the 19th monthly (adjust if you like)
+    - cron: "20 9 19 * *"   # monthly; tweak if needed
   workflow_dispatch: {}
 
 permissions:
@@ -25,90 +25,125 @@ jobs:
           role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
           aws-region: us-east-1
 
-      - name: Download latest Apartment List CSV
-        run: |
-          set -euo pipefail
-          PAGE="https://www.apartmentlist.com/research/category/data-rent-estimates"
-          mkdir -p data standardized
-          URL=$(curl -fsSL "$PAGE" | grep -Eo 'https?://[^"]+rent[-_]estimates[^"]+\.csv' | head -n 1 || true)
-          if [[ -z "${URL:-}" ]]; then
-            echo "Could not auto-detect CSV link on ${PAGE}"; exit 1
-          fi
-          echo "Downloading: $URL"
-          curl -fsSL "$URL" -o data/apartmentlist_raw.csv
-          head -n 2 data/apartmentlist_raw.csv
-
-      - name: Setup Python
+      - name: Setup Python + Playwright
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.47.0 pandas lxml
+          python -m playwright install --with-deps chromium
 
-      - name: Install pandas
-        run: pip install pandas
+      - name: Download AptList CSV (headless browser)
+        env:
+          URL: https://www.apartmentlist.com/research/category/data-rent-estimates
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          python - <<'PY'
+          import asyncio, re
+          from pathlib import Path
+          from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
-      - name: Melt to long CSV (Python)
+          URL = "https://www.apartmentlist.com/research/category/data-rent-estimates"
+          OUT = Path("data/apartmentlist_raw.csv")
+
+          async def main():
+            async with async_playwright() as p:
+              browser = await p.chromium.launch(headless=True)
+              ctx = await browser.new_context(accept_downloads=True,
+                                              user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
+                                                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                                          "Chrome/123 Safari/537.36"))
+              page = await ctx.new_page()
+              await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+
+              # 1) Select "Historic Rent Estimates (Jan 2017 - Present)" from dropdown
+              #    (Material UI exposes it as a combobox)
+              try:
+                combo = page.get_by_role("combobox").first
+                await combo.click()
+                opt = page.get_by_role("option", name=re.compile(r"Historic Rent Estimates", re.I))
+                await opt.click()
+              except PWTimeout:
+                # If UI already defaults correctly, continue.
+                pass
+              except Exception:
+                pass
+
+              # 2) Click "Download" and capture the CSV
+              btn = page.get_by_role("button", name=re.compile(r"^Download$", re.I))
+              if await btn.count() == 0:
+                raise SystemExit("Download button not found")
+
+              async with page.expect_download(timeout=45000) as dl_info:
+                await btn.first.click()
+              dl = await dl_info.value
+              path = await dl.path()
+              OUT.write_bytes(Path(path).read_bytes())
+              print("Downloaded:", dl.suggested_filename)
+              await browser.close()
+
+          asyncio.run(main())
+          PY
+          head -n 2 data/apartmentlist_raw.csv
+
+      - name: Normalize to long schema
         run: |
           python - <<'PY'
-          import re, pandas as pd
+          import re, pandas as pd, sys
           src = "data/apartmentlist_raw.csv"
-          dst = "standardized/apartmentlist_long.csv"
+          dst = "data/apartmentlist_long.csv"
           df  = pd.read_csv(src)
 
-          # Try both shapes:
-          cols = [c.lower() for c in df.columns]
-
-          # If already long (has 'month' & 'rent_index'), just normalize names/order
-          if 'month' in cols and 'rent_index' in cols:
-              # Standardize column names
+          cols = [c.lower().strip() for c in df.columns]
+          # Already long?
+          if "month" in cols and "rent_index" in cols:
               rename = {
                 'location name':'location_name','location':'location_name',
                 'location_type':'location_type',
                 'location fips code':'location_fips_code','location_fips_code':'location_fips_code',
-                'population':'population',
-                'state':'state',
-                'county':'county',
-                'metro':'metro',
-                'rent_index':'rent_index',
-                'month':'month',
+                'population':'population','state':'state','county':'county','metro':'metro',
+                'rent_index':'rent_index','month':'month'
               }
-              df = df.rename(columns={c:rename.get(c.lower(),c) for c in df.columns})
-              keep = ['location_name','location_type','location_fips_code','population','state','county','metro','rent_index','month']
+              df = df.rename(columns={c:rename.get(c.lower().strip(),c) for c in df.columns})
+              keep = ['location_name','location_type','location_fips_code','population',
+                      'state','county','metro','rent_index','month']
               for k in keep:
-                  if k not in df.columns: df[k]=None
-              out = df[keep]
-              out.to_csv(dst, index=False)
+                  if k not in df.columns: df[k] = None
+              df[keep].to_csv(dst, index=False)
           else:
-              # Wide shape: id columns + YYYY_MM or YYYY-MM(-DD) month columns → melt
-              id_candidates = ['location_name','location type','location_type','location fips code','location_fips_code',
-                               'population','state','county','metro']
-              # Normalize a copy for detection
+              # Wide -> long: identify id cols + YYYY_MM or YYYY-MM( -DD ) columns
               dfn = df.rename(columns={c:c.lower().strip() for c in df.columns})
+              id_candidates = ['location_name','location type','location_type',
+                               'location fips code','location_fips_code',
+                               'population','state','county','metro']
               id_cols = [c for c in dfn.columns if c in id_candidates]
               if not id_cols:
-                  # fallback common set found on research CSVs
                   id_cols = [c for c in dfn.columns if c in ['location_name','state','county','metro']]
               date_cols = [c for c in dfn.columns if re.fullmatch(r'\d{4}[-_]\d{2}([-_]\d{2})?', c)]
               if not date_cols:
-                  raise SystemExit("Could not detect date columns in Apartment List CSV")
+                  raise SystemExit("No date columns found to melt")
 
               long = dfn.melt(id_vars=id_cols, value_vars=date_cols,
                               var_name='month', value_name='rent_index')
-              # Standardize outputs and fill missing id fields
               long['month'] = pd.to_datetime(long['month'].str.replace('_','-')).dt.date
-              std = pd.DataFrame({
-                  'location_name': long.get('location_name', None),
-                  'location_type': long.get('location_type', None),
-                  'location_fips_code': long.get('location_fips_code', None),
-                  'population': long.get('population', None),
-                  'state': long.get('state', None),
-                  'county': long.get('county', None),
-                  'metro': long.get('metro', None),
-                  'rent_index': long['rent_index'],
-                  'month': long['month'],
+              out = pd.DataFrame({
+                'location_name': long.get('location_name'),
+                'location_type': long.get('location_type'),
+                'location_fips_code': long.get('location_fips_code'),
+                'population': long.get('population'),
+                'state': long.get('state'),
+                'county': long.get('county'),
+                'metro': long.get('metro'),
+                'rent_index': long['rent_index'],
+                'month': long['month'],
               })
-              std.to_csv(dst, index=False)
+              out.to_csv(dst, index=False)
+
           print("Wrote", dst)
           PY
+          head -n 2 data/apartmentlist_long.csv
 
       - name: Upload to S3 (date-stamped prefix)
         env:
@@ -118,7 +153,7 @@ jobs:
           if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
           TODAY=$(date -u +%F)
           aws s3api put-object --bucket "$BUCKET" --key "aptlist/$TODAY/"
-          aws s3 cp standardized/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/"
+          aws s3 cp data/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/apartmentlist_long.csv"
 
       - name: Verify S3 upload
         env:
