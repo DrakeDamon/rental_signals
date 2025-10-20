@@ -1,15 +1,9 @@
-name: Update Apartment List CSV to S3 (Headless)
+name: Update Apartment List CSV to S3
 
 on:
   schedule:
-    - cron: "20 9 19 * *"   # Monthly on 19th at 09:20 UTC
-  workflow_dispatch:
-    inputs:
-      option_name:
-        description: 'Dropdown option to select'
-        required: false
-        default: 'Historic Rent Estimates (Jan 2017 - Present)'
-        type: string
+    - cron: "20 9 19 * *"   # 09:20 UTC on the 19th monthly
+  workflow_dispatch: {}
 
 permissions:
   id-token: write
@@ -23,8 +17,7 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Assume AWS role (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,16 +25,17 @@ jobs:
           role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
           aws-region: us-east-1
 
+      # --- Headless browser download ---
       - name: Setup Python + Playwright
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: |
           python -m pip install --upgrade pip
-          pip install playwright==1.47.0 pandas
+          pip install playwright==1.47.0 pandas lxml
           python -m playwright install --with-deps chromium
 
-      - name: Download AptList CSV (headless; target specific elements)
+      - name: Download AptList CSV (headless; exact elements)
         run: |
           set -euo pipefail
           mkdir -p data
@@ -52,69 +46,54 @@ jobs:
 
           URL = "https://www.apartmentlist.com/research/category/data-rent-estimates"
           OUT = Path("data/apartmentlist_raw.csv")
-          OPTION_TEXT = "Historic Rent Estimates (Jan 2017 - Present)"  # first dropdown option
 
           async def main():
             async with async_playwright() as p:
-              browser = await p.chromium.launch(headless=True)
-              ctx = await browser.new_context(
+              b = await p.chromium.launch(headless=True)
+              ctx = await b.new_context(
                 accept_downloads=True,
                 user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) "
                             "Chrome/123 Safari/537.36")
               )
               page = await ctx.new_page()
-              await page.goto(URL, wait_until="domcontentloaded", timeout=60_000)
+              await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
 
-              # --- Open dropdown and select the specific option ---
+              # Open dropdown and select: Historic Rent Estimates (Jan 2017 - Present)
               try:
-                # Click the MUI select by its stable id you provided
                 combo = page.locator("#mui-component-select-age")
                 await combo.click(force=True)
-                # Select the option row by visible text (works even if listbox id is dynamic)
                 opt = page.get_by_role("option", name=re.compile(r"^Historic Rent Estimates", re.I))
                 await opt.click()
-              except PWTimeout:
-                pass  # if already selected, continue
               except Exception:
-                # Fallback: use ARIA role if id ever changes
-                try:
-                  c2 = page.get_by_role("combobox").first
-                  await c2.click()
-                  await page.get_by_role("option", name=re.compile(r"^Historic Rent Estimates", re.I)).click()
-                except Exception:
-                  pass  # don't fail just because it was preselected
+                pass  # ok if already selected
 
-              # --- Click the exact Download button you showed ---
+              # Click the Download button
               btn = page.locator('button:has-text("Download")').first
               if not await btn.count():
                 raise SystemExit("Download button not found")
-
-              async with page.expect_download(timeout=45_000) as dl_info:
+              async with page.expect_download(timeout=45000) as dl_info:
                 await btn.click()
-
               dl = await dl_info.value
-              path = await dl.path()
-              OUT.write_bytes(Path(path).read_bytes())
+              OUT.write_bytes(Path(await dl.path()).read_bytes())
               print("Downloaded:", dl.suggested_filename)
-
-              await browser.close()
+              await b.close()
 
           asyncio.run(main())
           PY
           head -n 2 data/apartmentlist_raw.csv
 
-      - name: Normalize to long format
+      # --- Normalize to long schema ---
+      - name: Melt to long CSV (Python)
         run: |
           python - <<'PY'
           import re, pandas as pd
           src = "data/apartmentlist_raw.csv"
-          dst = "data/apartmentlist_long.csv"
+          dst = "standardized/apartmentlist_long.csv"
           df  = pd.read_csv(src)
-
           cols = [c.lower().strip() for c in df.columns]
-          # Already long?
-          if "month" in cols and "rent_index" in cols:
+
+          if 'month' in cols and 'rent_index' in cols:
               rename = {
                 'location name':'location_name','location':'location_name',
                 'location_type':'location_type',
@@ -127,20 +106,16 @@ jobs:
                       'state','county','metro','rent_index','month']
               for k in keep:
                   if k not in df.columns: df[k] = None
-              df[keep].to_csv(dst, index=False)
+              out = df[keep]
           else:
-              # Wide -> long: identify id cols + YYYY_MM or YYYY-MM( -DD ) columns
               dfn = df.rename(columns={c:c.lower().strip() for c in df.columns})
               id_candidates = ['location_name','location type','location_type',
                                'location fips code','location_fips_code',
                                'population','state','county','metro']
-              id_cols = [c for c in dfn.columns if c in id_candidates]
-              if not id_cols:
-                  id_cols = [c for c in dfn.columns if c in ['location_name','state','county','metro']]
+              id_cols = [c for c in dfn.columns if c in id_candidates] or \
+                        [c for c in dfn.columns if c in ['location_name','state','county','metro']]
               date_cols = [c for c in dfn.columns if re.fullmatch(r'\d{4}[-_]\d{2}([-_]\d{2})?', c)]
-              if not date_cols:
-                  raise SystemExit("No date columns found to melt")
-
+              if not date_cols: raise SystemExit("No date columns found to melt")
               long = dfn.melt(id_vars=id_cols, value_vars=date_cols,
                               var_name='month', value_name='rent_index')
               long['month'] = pd.to_datetime(long['month'].str.replace('_','-')).dt.date
@@ -155,32 +130,25 @@ jobs:
                 'rent_index': long['rent_index'],
                 'month': long['month'],
               })
-              out.to_csv(dst, index=False)
 
-          print("Wrote", dst)
+          out.to_csv(dst, index=False)
+          print("Wrote", dst, "rows:", len(out))
           PY
-          head -n 2 data/apartmentlist_long.csv
 
-      - name: Upload to S3
+      # --- Upload to S3 ---
+      - name: Upload to S3 (date-stamped prefix)
         env:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
         run: |
           set -euo pipefail
-          if [[ -z "${BUCKET:-}" ]]; then echo "Error: RENT_SIGNALS_BUCKET variable not set"; exit 1; fi
+          if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
           TODAY=$(date -u +%F)
-          echo "Uploading to S3 bucket: $BUCKET"
-          echo "Date prefix: $TODAY"
-          
           aws s3api put-object --bucket "$BUCKET" --key "aptlist/$TODAY/"
-          aws s3 cp data/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/apartmentlist_long.csv"
-          
-          echo "✅ Upload completed"
+          aws s3 cp standardized/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/apartmentlist_long.csv"
 
       - name: Verify S3 upload
         env:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
         run: |
           TODAY=$(date -u +%F)
-          echo "Verifying upload to s3://$BUCKET/aptlist/$TODAY/"
           aws s3 ls "s3://$BUCKET/aptlist/$TODAY/"
-          echo "✅ Upload verification completed"
