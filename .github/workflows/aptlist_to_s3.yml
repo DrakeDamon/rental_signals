@@ -2,8 +2,7 @@ name: Update Apartment List CSV to S3
 
 on:
   schedule:
-    # 19th @ 09:20 UTC (their report usually lands mid-month)
-    - cron: "20 9 19 * *"
+    - cron: "20 9 19 * *"   # 09:20 UTC on the 19th monthly (adjust if you like)
   workflow_dispatch: {}
 
 permissions:
@@ -26,20 +25,90 @@ jobs:
           role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
           aws-region: us-east-1
 
-      - name: Find latest Apartment List Rent Estimates CSV and download
+      - name: Download latest Apartment List CSV
         run: |
           set -euo pipefail
           PAGE="https://www.apartmentlist.com/research/category/data-rent-estimates"
-          mkdir -p data
-          # Grab first CSV link on the page that looks like a rent-estimates file
-          URL=$(curl -fsSL "$PAGE" \
-            | grep -Eo 'https?://[^"]+rent[-_]estimates[^"]+\.csv' \
-            | head -n 1)
-          if [[ -z "${URL:-}" ]]; then echo "Could not find CSV link on $PAGE"; exit 1; fi
-          echo "Downloading $URL"
-          curl -fsSL "$URL" -o data/apartmentlist_rent_estimates.csv
-          head -n 2 data/apartmentlist_rent_estimates.csv
-          wc -l data/apartmentlist_rent_estimates.csv
+          mkdir -p data standardized
+          URL=$(curl -fsSL "$PAGE" | grep -Eo 'https?://[^"]+rent[-_]estimates[^"]+\.csv' | head -n 1 || true)
+          if [[ -z "${URL:-}" ]]; then
+            echo "Could not auto-detect CSV link on ${PAGE}"; exit 1
+          fi
+          echo "Downloading: $URL"
+          curl -fsSL "$URL" -o data/apartmentlist_raw.csv
+          head -n 2 data/apartmentlist_raw.csv
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pandas
+        run: pip install pandas
+
+      - name: Melt to long CSV (Python)
+        run: |
+          python - <<'PY'
+          import re, pandas as pd
+          src = "data/apartmentlist_raw.csv"
+          dst = "standardized/apartmentlist_long.csv"
+          df  = pd.read_csv(src)
+
+          # Try both shapes:
+          cols = [c.lower() for c in df.columns]
+
+          # If already long (has 'month' & 'rent_index'), just normalize names/order
+          if 'month' in cols and 'rent_index' in cols:
+              # Standardize column names
+              rename = {
+                'location name':'location_name','location':'location_name',
+                'location_type':'location_type',
+                'location fips code':'location_fips_code','location_fips_code':'location_fips_code',
+                'population':'population',
+                'state':'state',
+                'county':'county',
+                'metro':'metro',
+                'rent_index':'rent_index',
+                'month':'month',
+              }
+              df = df.rename(columns={c:rename.get(c.lower(),c) for c in df.columns})
+              keep = ['location_name','location_type','location_fips_code','population','state','county','metro','rent_index','month']
+              for k in keep:
+                  if k not in df.columns: df[k]=None
+              out = df[keep]
+              out.to_csv(dst, index=False)
+          else:
+              # Wide shape: id columns + YYYY_MM or YYYY-MM(-DD) month columns → melt
+              id_candidates = ['location_name','location type','location_type','location fips code','location_fips_code',
+                               'population','state','county','metro']
+              # Normalize a copy for detection
+              dfn = df.rename(columns={c:c.lower().strip() for c in df.columns})
+              id_cols = [c for c in dfn.columns if c in id_candidates]
+              if not id_cols:
+                  # fallback common set found on research CSVs
+                  id_cols = [c for c in dfn.columns if c in ['location_name','state','county','metro']]
+              date_cols = [c for c in dfn.columns if re.fullmatch(r'\d{4}[-_]\d{2}([-_]\d{2})?', c)]
+              if not date_cols:
+                  raise SystemExit("Could not detect date columns in Apartment List CSV")
+
+              long = dfn.melt(id_vars=id_cols, value_vars=date_cols,
+                              var_name='month', value_name='rent_index')
+              # Standardize outputs and fill missing id fields
+              long['month'] = pd.to_datetime(long['month'].str.replace('_','-')).dt.date
+              std = pd.DataFrame({
+                  'location_name': long.get('location_name', None),
+                  'location_type': long.get('location_type', None),
+                  'location_fips_code': long.get('location_fips_code', None),
+                  'population': long.get('population', None),
+                  'state': long.get('state', None),
+                  'county': long.get('county', None),
+                  'metro': long.get('metro', None),
+                  'rent_index': long['rent_index'],
+                  'month': long['month'],
+              })
+              std.to_csv(dst, index=False)
+          print("Wrote", dst)
+          PY
 
       - name: Upload to S3 (date-stamped prefix)
         env:
@@ -49,7 +118,7 @@ jobs:
           if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
           TODAY=$(date -u +%F)
           aws s3api put-object --bucket "$BUCKET" --key "aptlist/$TODAY/"
-          aws s3 cp data/apartmentlist_rent_estimates.csv "s3://$BUCKET/aptlist/$TODAY/"
+          aws s3 cp standardized/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/"
 
       - name: Verify S3 upload
         env:
