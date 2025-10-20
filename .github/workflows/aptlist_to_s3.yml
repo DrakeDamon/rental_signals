@@ -1,9 +1,15 @@
-name: Update Apartment List CSV to S3 (Headless)
+name: Update Apartment List CSV to S3 (Modular)
 
 on:
   schedule:
-    - cron: "20 9 19 * *"   # monthly; tweak if needed
-  workflow_dispatch: {}
+    - cron: "20 9 19 * *"   # Monthly on 19th at 09:20 UTC
+  workflow_dispatch:
+    inputs:
+      option_name:
+        description: 'Dropdown option to select'
+        required: false
+        default: 'Historic Rent Estimates (Jan 2017 - Present)'
+        type: string
 
 permissions:
   id-token: write
@@ -17,7 +23,8 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Assume AWS role (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -25,139 +32,133 @@ jobs:
           role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
           aws-region: us-east-1
 
-      - name: Setup Python + Playwright
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: |
+
+      - name: Install dependencies
+        run: |
           python -m pip install --upgrade pip
           pip install playwright==1.47.0 pandas lxml
           python -m playwright install --with-deps chromium
 
-      - name: Download AptList CSV (headless browser)
+      - name: Create data directory
+        run: mkdir -p data
+
+      - name: Download Apartment List CSV
         env:
-          URL: https://www.apartmentlist.com/research/category/data-rent-estimates
+          OPTION_NAME: ${{ inputs.option_name || 'Historic Rent Estimates (Jan 2017 - Present)' }}
         run: |
           set -euo pipefail
-          mkdir -p data
-          python - <<'PY'
-          import asyncio, re
-          from pathlib import Path
-          from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-
-          URL = "https://www.apartmentlist.com/research/category/data-rent-estimates"
-          OUT = Path("data/apartmentlist_raw.csv")
-
-          async def main():
-            async with async_playwright() as p:
-              browser = await p.chromium.launch(headless=True)
-              ctx = await browser.new_context(accept_downloads=True,
-                                              user_agent=("Mozilla/5.0 (X11; Linux x86_64) "
-                                                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                                          "Chrome/123 Safari/537.36"))
-              page = await ctx.new_page()
-              await page.goto(URL, wait_until="domcontentloaded", timeout=60000)
-
-              # 1) Select "Historic Rent Estimates (Jan 2017 - Present)" from dropdown
-              #    (Material UI exposes it as a combobox)
-              try:
-                combo = page.get_by_role("combobox").first
-                await combo.click()
-                opt = page.get_by_role("option", name=re.compile(r"Historic Rent Estimates", re.I))
-                await opt.click()
-              except PWTimeout:
-                # If UI already defaults correctly, continue.
-                pass
-              except Exception:
-                pass
-
-              # 2) Click "Download" and capture the CSV
-              btn = page.get_by_role("button", name=re.compile(r"^Download$", re.I))
-              if await btn.count() == 0:
-                raise SystemExit("Download button not found")
-
-              async with page.expect_download(timeout=45000) as dl_info:
-                await btn.first.click()
-              dl = await dl_info.value
-              path = await dl.path()
-              OUT.write_bytes(Path(path).read_bytes())
-              print("Downloaded:", dl.suggested_filename)
-              await browser.close()
-
-          asyncio.run(main())
-          PY
+          python scripts/download_apartmentlist.py \
+            --option "$OPTION_NAME" \
+            --out data/apartmentlist_raw.csv
+          
+          echo "Downloaded file preview:"
           head -n 2 data/apartmentlist_raw.csv
+          echo "File size: $(wc -l < data/apartmentlist_raw.csv) lines"
 
-      - name: Normalize to long schema
+      - name: Normalize to long format
         run: |
-          python - <<'PY'
-          import re, pandas as pd, sys
-          src = "data/apartmentlist_raw.csv"
-          dst = "data/apartmentlist_long.csv"
-          df  = pd.read_csv(src)
-
-          cols = [c.lower().strip() for c in df.columns]
-          # Already long?
-          if "month" in cols and "rent_index" in cols:
-              rename = {
-                'location name':'location_name','location':'location_name',
-                'location_type':'location_type',
-                'location fips code':'location_fips_code','location_fips_code':'location_fips_code',
-                'population':'population','state':'state','county':'county','metro':'metro',
-                'rent_index':'rent_index','month':'month'
-              }
-              df = df.rename(columns={c:rename.get(c.lower().strip(),c) for c in df.columns})
-              keep = ['location_name','location_type','location_fips_code','population',
-                      'state','county','metro','rent_index','month']
-              for k in keep:
-                  if k not in df.columns: df[k] = None
-              df[keep].to_csv(dst, index=False)
-          else:
-              # Wide -> long: identify id cols + YYYY_MM or YYYY-MM( -DD ) columns
-              dfn = df.rename(columns={c:c.lower().strip() for c in df.columns})
-              id_candidates = ['location_name','location type','location_type',
-                               'location fips code','location_fips_code',
-                               'population','state','county','metro']
-              id_cols = [c for c in dfn.columns if c in id_candidates]
-              if not id_cols:
-                  id_cols = [c for c in dfn.columns if c in ['location_name','state','county','metro']]
-              date_cols = [c for c in dfn.columns if re.fullmatch(r'\d{4}[-_]\d{2}([-_]\d{2})?', c)]
-              if not date_cols:
-                  raise SystemExit("No date columns found to melt")
-
-              long = dfn.melt(id_vars=id_cols, value_vars=date_cols,
-                              var_name='month', value_name='rent_index')
-              long['month'] = pd.to_datetime(long['month'].str.replace('_','-')).dt.date
-              out = pd.DataFrame({
-                'location_name': long.get('location_name'),
-                'location_type': long.get('location_type'),
-                'location_fips_code': long.get('location_fips_code'),
-                'population': long.get('population'),
-                'state': long.get('state'),
-                'county': long.get('county'),
-                'metro': long.get('metro'),
-                'rent_index': long['rent_index'],
-                'month': long['month'],
-              })
-              out.to_csv(dst, index=False)
-
-          print("Wrote", dst)
-          PY
+          set -euo pipefail
+          python scripts/normalize_aptlist.py \
+            --in data/apartmentlist_raw.csv \
+            --out data/apartmentlist_long.csv
+          
+          echo "Normalized file preview:"
           head -n 2 data/apartmentlist_long.csv
+          echo "Final file size: $(wc -l < data/apartmentlist_long.csv) lines"
 
-      - name: Upload to S3 (date-stamped prefix)
+      - name: Validate output format
+        run: |
+          set -euo pipefail
+          
+          # Check that file exists and has content
+          if [[ ! -f "data/apartmentlist_long.csv" ]]; then
+            echo "Error: Output file not found"
+            exit 1
+          fi
+          
+          # Check file has more than just header
+          line_count=$(wc -l < data/apartmentlist_long.csv)
+          if [[ $line_count -lt 2 ]]; then
+            echo "Error: Output file has no data rows"
+            exit 1
+          fi
+          
+          # Verify column structure
+          expected_cols="location_name,location_type,location_fips_code,population,state,county,metro,rent_index,month"
+          actual_header=$(head -n 1 data/apartmentlist_long.csv)
+          
+          if [[ "$actual_header" != "$expected_cols" ]]; then
+            echo "Error: Unexpected column structure"
+            echo "Expected: $expected_cols"
+            echo "Actual: $actual_header"
+            exit 1
+          fi
+          
+          echo "✅ Output validation passed"
+          echo "Columns: $actual_header"
+          echo "Rows: $((line_count - 1))"
+
+      - name: Upload to S3
         env:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
         run: |
           set -euo pipefail
-          if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
+          
+          if [[ -z "${BUCKET:-}" ]]; then
+            echo "Error: RENT_SIGNALS_BUCKET variable not set"
+            exit 1
+          fi
+          
           TODAY=$(date -u +%F)
+          echo "Uploading to S3 bucket: $BUCKET"
+          echo "Date prefix: $TODAY"
+          
+          # Create date prefix
           aws s3api put-object --bucket "$BUCKET" --key "aptlist/$TODAY/"
+          
+          # Upload the normalized CSV
           aws s3 cp data/apartmentlist_long.csv "s3://$BUCKET/aptlist/$TODAY/apartmentlist_long.csv"
+          
+          echo "✅ Upload completed"
 
       - name: Verify S3 upload
         env:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
         run: |
+          set -euo pipefail
+          
           TODAY=$(date -u +%F)
+          echo "Verifying upload to s3://$BUCKET/aptlist/$TODAY/"
+          
+          # List objects in the prefix
           aws s3 ls "s3://$BUCKET/aptlist/$TODAY/"
+          
+          # Get object metadata
+          aws s3api head-object \
+            --bucket "$BUCKET" \
+            --key "aptlist/$TODAY/apartmentlist_long.csv" \
+            --query 'ContentLength' \
+            --output text | xargs -I {} echo "Uploaded file size: {} bytes"
+          
+          echo "✅ Upload verification completed"
+
+      - name: Summary
+        if: always()
+        env:
+          BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
+          OPTION_NAME: ${{ inputs.option_name || 'Historic Rent Estimates (Jan 2017 - Present)' }}
+        run: |
+          TODAY=$(date -u +%F)
+          echo "=== Apartment List Data Collection Summary ==="
+          echo "Selected option: $OPTION_NAME"
+          echo "Target S3 location: s3://$BUCKET/aptlist/$TODAY/apartmentlist_long.csv"
+          echo "Workflow status: ${{ job.status }}"
+          
+          if [[ -f "data/apartmentlist_long.csv" ]]; then
+            lines=$(wc -l < data/apartmentlist_long.csv)
+            echo "Final data rows: $((lines - 1))"
+          fi
