@@ -26,6 +26,14 @@ jobs:
           role-to-assume: arn:aws:iam::607709788146:role/RentSignalsGhOidcUploader
           aws-region: us-east-1
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
       - name: Download Zillow Metro ZORI (wide CSV)
         run: |
           set -euo pipefail
@@ -36,6 +44,15 @@ jobs:
           head -n 2 data/zori_metro_wide.csv
           wc -l data/zori_metro_wide.csv
 
+      - name: Convert wide to long format
+        run: |
+          set -euo pipefail
+          mkdir -p standardized
+          python scripts/zillow_wide_to_long.py \
+            data/zori_metro_wide.csv \
+            standardized/zori_metro_long.csv
+          head -n 5 standardized/zori_metro_long.csv
+
       - name: Upload to S3 (date-stamped prefix)
         env:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
@@ -44,7 +61,9 @@ jobs:
           if [[ -z "${BUCKET:-}" ]]; then echo "Set Actions variable RENT_SIGNALS_BUCKET"; exit 1; fi
           TODAY=$(date -u +%F)
           aws s3api put-object --bucket "$BUCKET" --key "zillow/metro/$TODAY/"
+          # Upload both wide (reference) and long (for Snowflake)
           aws s3 cp data/zori_metro_wide.csv "s3://$BUCKET/zillow/metro/$TODAY/"
+          aws s3 cp standardized/zori_metro_long.csv "s3://$BUCKET/zillow/metro/$TODAY/"
 
       - name: Verify S3 upload
         env:

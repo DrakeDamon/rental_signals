@@ -30,7 +30,7 @@ CREATE OR REPLACE STAGE fred_stage
     URL = 's3://rent-signals-dev-dd/fred/'
     FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1);
 
--- 6. Test data loading (ApartmentList example)
+-- 6. Create tables for long format data
 CREATE OR REPLACE TABLE apt_list_raw (
     location_name STRING,
     location_type STRING,
@@ -43,17 +43,45 @@ CREATE OR REPLACE TABLE apt_list_raw (
     month DATE
 );
 
--- 7. Load data from external stage
+CREATE OR REPLACE TABLE zori_metro_long (
+    regionid NUMBER,
+    sizerank NUMBER,
+    metro STRING,
+    region_type STRING,
+    state_name STRING,
+    month DATE,
+    zori FLOAT
+);
+
+-- 7. Load ApartmentList data from external stage
 COPY INTO apt_list_raw
 FROM @apt_list_stage
 PATTERN = '.*\.csv'
 ON_ERROR = 'CONTINUE';
 
--- 8. Verify data loaded successfully
-SELECT COUNT(*) as total_rows FROM apt_list_raw;
-SELECT * FROM apt_list_raw LIMIT 10;
+-- 8. Load Zillow Metro data (long format)
+COPY INTO zori_metro_long (regionid, sizerank, metro, region_type, state_name, month, zori)
+FROM (
+  SELECT 
+    TRY_TO_NUMBER($1),
+    TRY_TO_NUMBER($2),
+    $3::STRING,
+    $4::STRING,
+    $5::STRING,
+    TO_DATE($6),
+    TRY_TO_NUMBER($7)
+  FROM @zillow_stage
+  WHERE $1 RLIKE '^[0-9]+$'  -- Skip header rows
+)
+ON_ERROR = 'CONTINUE';
 
--- 9. Create stored procedure for automated data loading
+-- 9. Verify data loaded successfully
+SELECT COUNT(*) as apt_list_rows FROM apt_list_raw;
+SELECT COUNT(*) as zori_metro_rows FROM zori_metro_long;
+SELECT * FROM apt_list_raw LIMIT 5;
+SELECT * FROM zori_metro_long ORDER BY month DESC LIMIT 5;
+
+-- 10. Create stored procedure for automated data loading
 CREATE OR REPLACE PROCEDURE load_rent_signals_data()
 RETURNS STRING
 LANGUAGE SQL
@@ -62,16 +90,33 @@ $$
 BEGIN
     -- Clear existing data
     TRUNCATE TABLE apt_list_raw;
+    TRUNCATE TABLE zori_metro_long;
     
-    -- Load fresh data
+    -- Load ApartmentList data
     COPY INTO apt_list_raw
     FROM @apt_list_stage
     PATTERN = '.*\.csv'
     ON_ERROR = 'CONTINUE';
     
-    RETURN 'Data loading completed successfully';
+    -- Load Zillow Metro data (long format)
+    COPY INTO zori_metro_long (regionid, sizerank, metro, region_type, state_name, month, zori)
+    FROM (
+      SELECT 
+        TRY_TO_NUMBER($1),
+        TRY_TO_NUMBER($2),
+        $3::STRING,
+        $4::STRING,
+        $5::STRING,
+        TO_DATE($6),
+        TRY_TO_NUMBER($7)
+      FROM @zillow_stage
+      WHERE $1 RLIKE '^[0-9]+$'  -- Skip header rows
+    )
+    ON_ERROR = 'CONTINUE';
+    
+    RETURN 'Data loading completed successfully for both ApartmentList and Zillow data';
 END;
 $$;
 
--- 10. Execute the stored procedure
+-- 11. Execute the stored procedure
 CALL load_rent_signals_data();
