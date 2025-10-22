@@ -70,4 +70,10 @@ jobs:
           BUCKET: ${{ vars.RENT_SIGNALS_BUCKET }}
         run: |
           TODAY=$(date -u +%F)
-          aws s3 ls "s3://$BUCKET/zillow/metro/$TODAY/"
+          echo "Files uploaded to s3://$BUCKET/zillow/metro/$TODAY/:"
+          aws s3 ls "s3://$BUCKET/zillow/metro/$TODAY/" --human-readable
+          
+          # Verify file contents
+          echo ""
+          echo "Long format CSV sample (first 3 lines):"
+          aws s3 cp "s3://$BUCKET/zillow/metro/$TODAY/zori_metro_long.csv" - | head -n 3

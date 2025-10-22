@@ -12,23 +12,38 @@ CREATE OR REPLACE STORAGE INTEGRATION rent_signals_s3_integration
 -- 2. Verify the storage integration
 DESC STORAGE INTEGRATION rent_signals_s3_integration;
 
+-- 2b. Create named file formats for better debugging
+CREATE OR REPLACE FILE FORMAT FF_CSV_HEADER_QUOTED
+    TYPE = CSV
+    SKIP_HEADER = 1
+    FIELD_DELIMITER = ','
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    NULL_IF = ('', 'NULL', 'null')
+    EMPTY_FIELD_AS_NULL = TRUE;
+
 -- 3. Create external stage for ApartmentList data
 CREATE OR REPLACE STAGE apt_list_stage
     STORAGE_INTEGRATION = rent_signals_s3_integration
     URL = 's3://rent-signals-dev-dd/aptlist/'
-    FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1);
+    FILE_FORMAT = FF_CSV_HEADER_QUOTED;
 
--- 4. Create external stage for Zillow data  
+-- 4. Create external stage for Zillow data (long format)
 CREATE OR REPLACE STAGE zillow_stage
     STORAGE_INTEGRATION = rent_signals_s3_integration
-    URL = 's3://rent-signals-dev-dd/zillow/'
-    FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1);
+    URL = 's3://rent-signals-dev-dd/zillow/metro/'
+    FILE_FORMAT = FF_CSV_HEADER_QUOTED;
+
+-- 4b. Alternative stage names for clarity
+CREATE OR REPLACE STAGE S3_ZORI_METRO_STAGE
+    STORAGE_INTEGRATION = rent_signals_s3_integration
+    URL = 's3://rent-signals-dev-dd/zillow/metro/'
+    FILE_FORMAT = FF_CSV_HEADER_QUOTED;
 
 -- 5. Create external stage for FRED data
 CREATE OR REPLACE STAGE fred_stage
     STORAGE_INTEGRATION = rent_signals_s3_integration
     URL = 's3://rent-signals-dev-dd/fred/'
-    FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1);
+    FILE_FORMAT = FF_CSV_HEADER_QUOTED;
 
 -- 6. Create tables for long format data
 CREATE OR REPLACE TABLE apt_list_raw (
