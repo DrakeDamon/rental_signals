@@ -1,6 +1,6 @@
 # Tampa Rent Signals Data Pipeline
 
-A comprehensive data engineering pipeline for collecting, processing, and analyzing rental market data from multiple sources. The system integrates data from Zillow, ApartmentList, and Federal Reserve Economic Data (FRED) into a production-ready Snowflake data warehouse.
+A modern, production-ready data engineering pipeline for collecting, processing, and analyzing rental market data from multiple sources. The system integrates data from Zillow, ApartmentList, and Federal Reserve Economic Data (FRED) using **dbt Core**, **Great Expectations**, and **Dagster** with Snowflake as the cloud data warehouse.
 
 ## 🏗️ Architecture Overview
 
@@ -102,9 +102,9 @@ flowchart TD
 
 ### Processing Layers
 1. **🥉 Bronze (RAW)**: Raw CSV files ingested from S3 with minimal processing
-2. **🥈 Silver (ANALYTICS)**: Cleaned, validated star schema with SCD Type 2 historical tracking  
-3. **🥇 Gold (BUSINESS)**: Aggregated, business-friendly views optimized for analytics
-4. **⚙️ ETL**: Automated stored procedures handling all data transformations
+2. **🥈 Silver (ANALYTICS)**: dbt-managed star schema with SCD Type 2 historical tracking  
+3. **🥇 Gold (BUSINESS)**: dbt mart models optimized for business analytics
+4. **⚙️ Orchestration**: Dagster software-defined assets with Great Expectations validation
 
 ## 📁 Project Structure
 
@@ -114,37 +114,49 @@ flowchart TD
 │       ├── aptlist/        # ApartmentList data
 │       ├── fred/           # Federal Reserve economic data
 │       └── zillow/         # Zillow ZORI data
-├── docs/                   # Documentation and sample data
-│   └── diagrams/          # Mermaid architecture diagrams
-├── infra/                  # Infrastructure as code
-│   └── aws/               # AWS infrastructure components
-│       ├── policies/      # IAM policies and trust relationships
-│       └── README.md      # AWS setup instructions
-├── scripts/               # Data processing and utility scripts
-│   ├── standardize.py     # Main data transformation script
-│   ├── debug_csv_locally.sh    # Local CSV validation
-│   ├── test_pipeline_end_to_end.sh  # End-to-end testing
-│   └── *.py              # Source-specific processing scripts
-├── sql/                   # Data warehouse SQL components
-│   ├── schema/           # Database schema definitions
-│   ├── etl/              # ETL stored procedures
-│   ├── views/            # Analytics and business intelligence views
-│   ├── debug/            # Debugging and troubleshooting scripts
-│   └── README.md         # SQL components documentation
-├── standardized/         # Processed data in standardized format
-├── temp/                 # Temporary files and debug outputs
-├── CLAUDE.md            # AI assistant guidance
-├── Makefile             # Infrastructure automation commands
-└── README.md            # This file
+├── dbt_rent_signals/       # dbt Core project
+│   ├── models/            # dbt models (staging, core, marts)
+│   ├── snapshots/         # SCD Type 2 snapshots
+│   ├── macros/            # dbt macros and utilities
+│   ├── tests/             # dbt tests
+│   └── dbt_project.yml    # dbt configuration
+├── great_expectations/     # Data quality validation
+│   ├── expectations/      # Validation rules by layer
+│   ├── checkpoints/       # Automated validation workflows
+│   └── validate_data_quality.py  # CLI validation script
+├── dagster/               # Orchestration layer (coming soon)
+│   ├── assets/           # Software-defined assets
+│   ├── jobs/             # Dagster jobs and schedules
+│   └── sensors/          # Event-driven workflows
+├── docs/                  # Documentation and diagrams
+│   └── diagrams/         # Mermaid architecture diagrams
+├── infra/                 # Infrastructure as code
+│   └── aws/              # AWS infrastructure components
+│       ├── policies/     # IAM policies and trust relationships
+│       └── README.md     # AWS setup instructions
+├── scripts/              # Data processing and utility scripts
+│   ├── standardize.py    # Main data transformation script
+│   ├── debug_csv_locally.sh   # Local CSV validation
+│   └── test_pipeline_end_to_end.sh  # End-to-end testing
+├── sql/                  # Legacy SQL components (deprecated)
+│   ├── schema/          # Original Snowflake schema
+│   ├── etl/             # Legacy stored procedures
+│   └── views/           # Legacy business views
+├── standardized/        # Processed data in standardized format
+├── temp/                # Temporary files and debug outputs
+├── CLAUDE.md           # AI assistant guidance
+├── Makefile            # Infrastructure automation commands
+└── README.md           # This file
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- AWS CLI configured with appropriate permissions
-- Python 3.8+ with pandas
-- Snowflake account with necessary privileges
-- Make utility for infrastructure automation
+- **AWS CLI** configured with appropriate permissions
+- **Python 3.8+** with virtual environment support
+- **Snowflake account** with ACCOUNTADMIN privileges
+- **dbt Core** 1.6+ installed
+- **Make utility** for infrastructure automation
 
 ### 1. Environment Setup
 
@@ -182,22 +194,42 @@ python scripts/standardize.py
 ./scripts/test_pipeline_end_to_end.sh
 ```
 
-### 4. Data Warehouse Setup
+### 4. Modern dbt + Great Expectations Pipeline
+
+```bash
+# Install dbt dependencies
+cd dbt_rent_signals
+dbt deps
+
+# Set up Snowflake connection
+cp profiles.yml ~/.dbt/profiles.yml
+# Edit with your Snowflake credentials
+
+# Run dbt pipeline
+dbt run --models staging
+dbt run --models core  
+dbt run --models marts
+
+# Run data quality validation
+cd ../great_expectations
+python validate_data_quality.py --layer all
+```
+
+### 5. Legacy SQL Setup (Optional)
+
+For the original stored procedure approach:
 
 ```sql
 -- 1. Run initial setup
 @sql/schema/snowflake_setup.sql
 
--- 2. Create star schema
+-- 2. Create star schema  
 @sql/schema/analytics_schema_ddl.sql
 
 -- 3. Deploy ETL procedures
 @sql/etl/etl_procedures.sql
 
--- 4. Create analytics views
-@sql/views/gold_layer_views.sql
-
--- 5. Run full ETL process
+-- 4. Run full ETL process
 CALL RENTS.ANALYTICS.SP_FULL_ETL_PROCESS();
 ```
 
@@ -310,20 +342,21 @@ erDiagram
 ```
 
 **Key Features:**
-- **🔄 SCD Type 2**: Historical tracking for dimensions that change over time (LOCATION, ECONOMIC_SERIES)
-- **📊 Pre-calculated Measures**: YoY/MoM changes computed during ETL for performance
-- **🛡️ Data Quality**: Built-in scoring (1-10) and statistical anomaly detection
-- **⚡ Performance**: Clustered fact tables and materialized views for fast queries
-- **📋 Lineage**: Complete data provenance tracking from source to analytics
+- **🔄 SCD Type 2**: Historical tracking via dbt snapshots for dimensions that change over time
+- **📊 Pre-calculated Measures**: YoY/MoM changes computed in dbt models with window functions
+- **🛡️ Data Quality**: Great Expectations validation with 100+ business rule checks
+- **⚡ Performance**: Clustered tables and optimized dbt materializations
+- **📋 Lineage**: Complete data lineage through dbt docs and Great Expectations
+- **🤖 Modern Stack**: dbt Core + Great Expectations + Dagster orchestration
 
 ### Analytics Layer
 
-Business-friendly views for common analytical patterns:
-- **VW_RENT_TRENDS**: Comprehensive rent trend analysis
-- **VW_MARKET_RANKINGS**: Metro competitiveness and heat scores
-- **VW_ECONOMIC_CORRELATION**: Rent vs inflation correlation
-- **VW_REGIONAL_SUMMARY**: State and national aggregations
-- **VW_DATA_LINEAGE**: Data quality monitoring
+Business-friendly dbt mart models for analytics:
+- **mart_rent_trends**: Comprehensive cross-source rent trend analysis with investment scoring
+- **mart_market_rankings**: Metro competitiveness rankings with heat scores and recommendations
+- **mart_economic_correlation**: Rent vs inflation correlation with policy implications
+- **mart_regional_summary**: State and national market characterization
+- **mart_data_lineage**: Operational data quality monitoring and source tracking
 
 ## 📊 Data Sources
 
@@ -345,25 +378,34 @@ Business-friendly views for common analytical patterns:
 - **Metrics**: Consumer Price Index (CPI), Housing CPI
 - **Format**: Already in long format
 
-## 🔧 ETL Process
+## 🔧 Modern Data Stack
 
-### Data Standardization
-All data sources are transformed to a consistent long format:
-```
-month | location_id | metric_value | [source-specific columns]
-```
+### dbt Core - Analytics Engineering
+- **Staging Models**: Clean and standardize raw data with data quality scoring
+- **Core Models**: Star schema with SCD Type 2 snapshots for historical tracking
+- **Mart Models**: Business-ready analytics with pre-calculated metrics
+- **Incremental Processing**: Efficient updates for large datasets
+- **Documentation**: Auto-generated lineage and model documentation
 
-### Loading Strategy
-1. **Extract**: Download from source APIs/files
-2. **Transform**: Standardize format and validate quality
-3. **Load**: Upload to S3 with date partitioning
-4. **Warehouse**: ETL procedures with SCD Type 2 logic
+### Great Expectations - Data Quality
+- **100+ Validation Rules**: Comprehensive business rule validation
+- **Automated Checkpoints**: Pipeline-integrated quality gates
+- **Statistical Validation**: Outlier detection and range checking
+- **Data Profiling**: Automated data documentation and monitoring
+- **Failure Alerting**: Configurable notifications on quality issues
 
-### Data Quality Measures
-- **Validation**: Schema validation and data type checks
-- **Anomaly Detection**: Statistical outlier identification
-- **Completeness**: Null value and missing data tracking
-- **Consistency**: Cross-source data validation
+### Dagster - Orchestration (Coming Soon)
+- **Software-Defined Assets**: dbt models as first-class assets
+- **Asset Checks**: Great Expectations integrated as asset validations
+- **Incremental Processing**: Smart re-computation of downstream assets
+- **Monitoring**: Built-in observability and alerting
+- **Backfilling**: Historical data processing capabilities
+
+### Data Quality Framework
+- **Layer-Specific Validation**: Different standards for staging vs marts
+- **Business Rule Enforcement**: Rent growth limits, CPI validation
+- **Cross-Source Consistency**: Unified metrics across data sources
+- **Operational Monitoring**: Data freshness and pipeline health checks
 
 ## 🔐 Security & Compliance
 
@@ -406,41 +448,77 @@ SELECT * FROM RENTS.GOLD.VW_DATA_LINEAGE;
 
 ## 📈 Usage Examples
 
-### Business Analytics
+### Business Analytics with dbt Marts
 
 ```sql
 -- Top 10 fastest growing rental markets
 SELECT 
-    LOCATION_NAME,
-    STATE_NAME,
-    YOY_PCT_CHANGE,
-    RENT_VALUE
-FROM RENTS.GOLD.VW_RENT_TRENDS 
-WHERE DATA_SOURCE = 'Zillow ZORI'
-ORDER BY YOY_PCT_CHANGE DESC
+    location_name,
+    state_name,
+    yoy_pct_change,
+    rent_value,
+    investment_attractiveness_score,
+    market_temperature
+FROM mart_rent_trends 
+WHERE data_source = 'Zillow ZORI'
+  AND year = YEAR(CURRENT_DATE())
+ORDER BY yoy_pct_change DESC
 LIMIT 10;
 
--- Rent vs inflation correlation
+-- Market heat analysis with investment recommendations
 SELECT 
-    YEAR,
-    QUARTER,
-    AVG(RENT_CPI_SPREAD) AS rent_inflation_spread
-FROM RENTS.GOLD.VW_ECONOMIC_CORRELATION
-WHERE YEAR >= 2020
-GROUP BY YEAR, QUARTER
-ORDER BY YEAR, QUARTER;
+    location_name,
+    state_name,
+    market_heat_score,
+    market_classification,
+    investment_recommendation,
+    risk_assessment
+FROM mart_market_rankings
+WHERE market_size_category = 'Major Metro (5M+)'
+ORDER BY market_heat_score DESC;
+
+-- Economic correlation analysis
+SELECT 
+    year,
+    quarter,
+    economic_regime,
+    affordability_pressure,
+    policy_implications,
+    rent_housing_cpi_spread
+FROM mart_economic_correlation
+WHERE year >= 2020
+ORDER BY year, quarter;
 ```
 
-### Operational Monitoring
+### Data Quality Monitoring
 
 ```sql
--- Data freshness dashboard
+-- Operational dashboard
 SELECT 
-    SOURCE_NAME,
-    DAYS_SINCE_LATEST_DATA,
-    DATA_QUALITY_STATUS,
-    RECORD_COUNT
-FROM RENTS.GOLD.VW_DATA_LINEAGE;
+    table_name,
+    source_name,
+    data_freshness_status,
+    data_quality_status,
+    overall_reliability_score,
+    days_since_latest_data
+FROM mart_data_lineage
+ORDER BY overall_reliability_score DESC;
+```
+
+### dbt Commands
+
+```bash
+# Run specific mart models
+dbt run --models mart_rent_trends
+dbt run --models mart_market_rankings
+
+# Test data quality
+dbt test --models staging
+dbt test --models core
+
+# Generate documentation
+dbt docs generate
+dbt docs serve
 ```
 
 ## 🛠️ Development
@@ -449,14 +527,18 @@ FROM RENTS.GOLD.VW_DATA_LINEAGE;
 1. Create extraction script in `scripts/`
 2. Add transformation logic to `standardize.py`
 3. Update S3 structure and IAM policies
-4. Create corresponding fact/dimension tables
-5. Add ETL procedures and analytics views
+4. Create dbt staging model in `models/staging/`
+5. Add to core dimensions/facts as needed
+6. Create mart models for business analytics
+7. Add Great Expectations validation suite
+8. Update Dagster assets (when implemented)
 
-### Testing
-- Unit tests for transformation scripts
-- Integration tests for ETL procedures
-- End-to-end pipeline validation
-- Data quality monitoring
+### Testing Strategy
+- **dbt tests**: Schema validation and business rules
+- **Great Expectations**: Comprehensive data quality validation
+- **Integration tests**: End-to-end pipeline validation
+- **Unit tests**: Python transformation logic
+- **Data quality monitoring**: Continuous validation
 
 ## 📄 License
 
@@ -464,9 +546,20 @@ This project is for educational and analytical purposes. Data sources have their
 
 ## 🤝 Contributing
 
-This is a demonstration project. For production use, consider:
-- Additional data validation
-- Enhanced error handling
-- Monitoring and alerting
-- Performance optimization
-- Security hardening
+This project demonstrates modern data engineering best practices. The current implementation includes:
+
+**✅ Production Features Already Implemented:**
+- dbt Core for analytics engineering
+- Great Expectations for comprehensive data quality
+- SCD Type 2 historical tracking
+- Comprehensive business rule validation
+- Data lineage and documentation
+- Modular, testable codebase
+
+**🚀 Future Enhancements:**
+- Dagster orchestration (in progress)
+- Real-time data ingestion
+- Machine learning feature store
+- Advanced alerting and monitoring
+- Auto-scaling infrastructure
+- Data mesh architecture
