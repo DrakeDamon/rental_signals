@@ -1,0 +1,214 @@
+version: 2
+
+models:
+  # Dimension Tables
+  - name: dim_time
+    description: "Calendar dimension with monthly grain for rent data analysis"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 100  # At least 8+ years of data
+          max_value: 500  # Reasonable upper bound
+    columns:
+      - name: time_key
+        description: "Primary key in YYYYMM format (e.g., 202510)"
+        tests:
+          - not_null
+          - unique
+      - name: month_date
+        description: "First day of the month"
+        tests:
+          - not_null
+          - unique
+      - name: is_current_month
+        description: "Flag indicating current month"
+        tests:
+          - not_null
+      - name: rental_season
+        description: "Rental market seasonality classification"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Peak Moving Season', 'Low Moving Season', 'Normal Season']
+
+  - name: dim_location
+    description: "SCD Type 2 location dimension with historical tracking"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 50   # Minimum expected locations
+          max_value: 2000 # Reasonable upper bound
+    columns:
+      - name: location_key
+        description: "Surrogate key for SCD Type 2 support"
+        tests:
+          - not_null
+          - unique
+      - name: location_business_key
+        description: "Business key for location identification"
+        tests:
+          - not_null
+      - name: is_current
+        description: "Flag for current active version"
+        tests:
+          - not_null
+      - name: effective_date
+        description: "When this dimension version became active"
+        tests:
+          - not_null
+      - name: market_size_category
+        description: "Population-based market categorization"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Major Metro (5M+)', 'Large Metro (1M-5M)', 'Medium Metro (250K-1M)', 'Small Metro (<250K)', 'Unknown Size']
+
+  - name: dim_economic_series
+    description: "SCD Type 2 economic series dimension with metadata tracking"
+    columns:
+      - name: series_key
+        description: "Surrogate key for SCD Type 2 support"
+        tests:
+          - not_null
+          - unique
+      - name: series_id
+        description: "FRED series identifier"
+        tests:
+          - not_null
+      - name: category
+        description: "Economic indicator category"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Housing CPI', 'Core CPI', 'All Items CPI', 'Energy CPI', 'Food CPI', 'Other CPI']
+      - name: is_current
+        description: "Flag for current active version"
+        tests:
+          - not_null
+
+  - name: dim_data_source
+    description: "Data source dimension with source system metadata"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          value: 3  # Exactly 3 sources: Zillow, ApartmentList, FRED
+    columns:
+      - name: source_key
+        description: "Surrogate key for data source"
+        tests:
+          - not_null
+          - unique
+      - name: source_name
+        description: "Name of the data source"
+        tests:
+          - not_null
+          - unique
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Zillow ZORI', 'ApartmentList', 'FRED CPI']
+      - name: reliability_score
+        description: "Data source reliability score (1-10)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+
+  # Fact Tables
+  - name: fact_rent_zori
+    description: "Zillow ZORI rent facts with calculated measures"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1000   # Minimum expected facts
+          max_value: 500000 # Reasonable upper bound
+    columns:
+      - name: time_key
+        description: "Foreign key to dim_time"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_time')
+              field: time_key
+      - name: location_key
+        description: "Foreign key to dim_location"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_key
+      - name: source_key
+        description: "Foreign key to dim_data_source"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_data_source')
+              field: source_key
+      - name: zori_value
+        description: "Zillow Observed Rent Index value"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 15000
+      - name: data_quality_score
+        description: "Data quality score (1-10)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+      - name: growth_category
+        description: "YoY growth trend classification"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['High Growth', 'Moderate Growth', 'Low Growth', 'Slight Decline', 'Significant Decline', 'Insufficient History']
+
+  - name: fact_rent_aptlist
+    description: "ApartmentList rent facts with calculated measures"
+    columns:
+      - name: time_key
+        description: "Foreign key to dim_time"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_time')
+              field: time_key
+      - name: location_key
+        description: "Foreign key to dim_location"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_key
+      - name: rent_index
+        description: "ApartmentList rent index value"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 2000
+      - name: growth_category
+        description: "YoY growth trend classification"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Very High Growth', 'High Growth', 'Moderate Growth', 'Low Growth', 'Slight Decline', 'Significant Decline', 'Insufficient History']
+
+  - name: fact_economic_indicator
+    description: "Economic indicator facts with calculated measures"
+    columns:
+      - name: time_key
+        description: "Foreign key to dim_time"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_time')
+              field: time_key
+      - name: series_key
+        description: "Foreign key to dim_economic_series"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_economic_series')
+              field: series_key
+      - name: indicator_value
+        description: "Economic indicator value"
+        tests:
+          - not_null
+      - name: inflation_category
+        description: "Inflation trend classification for CPI data"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['High Inflation', 'Moderate Inflation', 'Low Inflation', 'Stable Prices', 'Deflation', 'Insufficient History', 'Not Applicable']
