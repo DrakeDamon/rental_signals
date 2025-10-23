@@ -124,10 +124,17 @@ flowchart TD
 │   ├── expectations/      # Validation rules by layer
 │   ├── checkpoints/       # Automated validation workflows
 │   └── validate_data_quality.py  # CLI validation script
-├── dagster/               # Orchestration layer (coming soon)
+├── dagster_rent_signals/   # Dagster orchestration layer
 │   ├── assets/           # Software-defined assets
 │   ├── jobs/             # Dagster jobs and schedules
-│   └── sensors/          # Event-driven workflows
+│   ├── sensors/          # Event-driven workflows
+│   ├── checks/           # Asset checks and validation
+│   └── resources/        # Dagster resources (dbt, Snowflake, GE)
+├── rent_signals_api/     # RESTful API application
+│   ├── app/              # FastAPI application
+│   ├── tests/            # API tests
+│   ├── Dockerfile        # Container configuration
+│   └── README.md         # API documentation
 ├── docs/                  # Documentation and diagrams
 │   └── diagrams/         # Mermaid architecture diagrams
 ├── infra/                 # Infrastructure as code
@@ -215,7 +222,27 @@ cd ../great_expectations
 python validate_data_quality.py --layer all
 ```
 
-### 5. Legacy SQL Setup (Optional)
+### 5. RESTful API Setup
+
+```bash
+# Navigate to API directory
+cd ../rent_signals_api
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your Snowflake credentials
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the API
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Access API documentation
+# http://localhost:8000/docs
+```
+
+### 6. Legacy SQL Setup (Optional)
 
 For the original stored procedure approach:
 
@@ -394,12 +421,21 @@ Business-friendly dbt mart models for analytics:
 - **Data Profiling**: Automated data documentation and monitoring
 - **Failure Alerting**: Configurable notifications on quality issues
 
-### Dagster - Orchestration (Coming Soon)
-- **Software-Defined Assets**: dbt models as first-class assets
-- **Asset Checks**: Great Expectations integrated as asset validations
+### Dagster - Orchestration
+- **Software-Defined Assets**: 15 assets covering all dbt models
+- **Asset Checks**: 12 comprehensive validation checks integrating Great Expectations
 - **Incremental Processing**: Smart re-computation of downstream assets
-- **Monitoring**: Built-in observability and alerting
-- **Backfilling**: Historical data processing capabilities
+- **Scheduling**: Daily and weekly automated execution
+- **Monitoring**: Built-in observability and alerting via Dagster UI
+- **Sensors**: Event-driven processing based on data freshness
+
+### RESTful API - Data Access
+- **FastAPI Framework**: Production-ready API with automatic documentation
+- **Market Data Endpoints**: Real-time rental market analysis and trends
+- **Price Drop Detection**: Automated alerts for rental deals and opportunities
+- **Market Rankings**: Investment attractiveness and heat score analysis
+- **Economic Correlation**: Rent vs inflation analysis with policy insights
+- **Regional Analytics**: State and metro-level market summaries
 
 ### Data Quality Framework
 - **Layer-Specific Validation**: Different standards for staging vs marts

@@ -1,0 +1,225 @@
+---
+title: Tampa Rent Signals - Complete System Architecture
+---
+graph TB
+    %% External Data Sources
+    subgraph "🌐 External Data Sources"
+        EXT1[📊 ApartmentList API<br/>County/Metro Rent Data]
+        EXT2[🏠 Zillow Research<br/>ZORI Metro Index]
+        EXT3[🏛️ Federal Reserve<br/>FRED Economic Data]
+    end
+
+    %% Data Collection & Processing
+    subgraph "📥 Data Collection Layer"
+        SCRIPT1[download_apartmentlist.py<br/>🔄 API Integration]
+        SCRIPT2[zillow_wide_to_long.py<br/>📊 Format Transformation]
+        SCRIPT3[standardize.py<br/>🔧 Master ETL Script]
+    end
+
+    %% Local Development Storage
+    subgraph "💻 Local Development"
+        LOCAL1[data/raw/<br/>📁 Source-specific folders<br/>📅 Date-based organization]
+        LOCAL2[standardized/<br/>📋 Long-format CSVs<br/>🎯 Consistent schema]
+    end
+
+    %% Cloud Infrastructure
+    subgraph "☁️ AWS Cloud Infrastructure"
+        S3[🪣 S3 Bucket<br/>🔐 Private & Encrypted<br/>📁 Date-based prefixes<br/>🔄 Versioning enabled]
+        IAM[🔑 IAM Policies<br/>👤 Least-privilege access<br/>🔒 Scoped S3 permissions<br/>🎫 OIDC for GitHub Actions]
+    end
+
+    %% Data Warehouse
+    subgraph "🏔️ Snowflake Data Warehouse"
+        direction TB
+        subgraph "🥉 RAW Schema"
+            RAW1[APTLIST_LONG<br/>📊 Raw apartment data]
+            RAW2[ZORI_METRO_LONG<br/>🏠 Raw Zillow data]
+            RAW3[FRED_CPI_LONG<br/>💰 Raw economic data]
+        end
+        
+        subgraph "🥈 STAGING Schema (dbt)"
+            STG1[STG_APTLIST<br/>🧹 Cleaned data<br/>📊 Quality scoring]
+            STG2[STG_ZORI<br/>🏙️ Metro classification<br/>🔍 Anomaly detection]
+            STG3[STG_FRED<br/>📋 Series validation<br/>⭐ Reliability scoring]
+        end
+        
+        subgraph "🥈 CORE Schema (dbt)"
+            SNAP1[SNAP_LOCATION<br/>📸 SCD Type 2 snapshots]
+            SNAP2[SNAP_ECONOMIC_SERIES<br/>📸 Historical tracking]
+            DIM1[DIM_TIME<br/>📅 Calendar dimension]
+            DIM2[DIM_LOCATION<br/>🗺️ Geography with history]
+            DIM3[DIM_ECONOMIC_SERIES<br/>📊 Series metadata]
+            DIM4[DIM_DATA_SOURCE<br/>📋 Source reference]
+            FACT1[FACT_RENT_ZORI<br/>🏠 Zillow rent facts<br/>📈 Calculated measures]
+            FACT2[FACT_RENT_APTLIST<br/>🏢 ApartmentList facts<br/>👥 Population analytics]
+            FACT3[FACT_ECONOMIC_INDICATOR<br/>💰 Economic facts<br/>📊 Trend analysis]
+        end
+        
+        subgraph "🥇 MARTS Schema (dbt)"
+            MART1[MART_RENT_TRENDS<br/>🔀 Cross-source analysis<br/>💡 Investment insights]
+            MART2[MART_MARKET_RANKINGS<br/>🏆 Competitiveness scores<br/>🔥 Heat mapping]
+            MART3[MART_ECONOMIC_CORRELATION<br/>💰 Rent vs inflation<br/>🏛️ Policy implications]
+            MART4[MART_REGIONAL_SUMMARY<br/>🗺️ State aggregations<br/>📈 Growth patterns]
+            MART5[MART_DATA_LINEAGE<br/>🔍 Operational monitoring<br/>📊 Quality dashboard]
+        end
+    end
+
+    %% Analytics Engineering Layer
+    subgraph "🛠️ Analytics Engineering"
+        DBT[🔧 dbt Core<br/>📊 15 models<br/>🔄 SCD Type 2<br/>📈 Business logic<br/>📋 Documentation]
+        GE[🛡️ Great Expectations<br/>✅ 100+ validation rules<br/>📊 Layer-specific suites<br/>🚨 Automated checkpoints<br/>📈 Data profiling]
+    end
+
+    %% Orchestration Layer
+    subgraph "⚙️ Dagster Orchestration"
+        direction TB
+        ASSETS[🎯 Software-Defined Assets<br/>📊 15 assets total<br/>🔗 Automatic dependencies<br/>📊 Metadata tracking]
+        CHECKS[🛡️ Asset Checks<br/>✅ 12 validation checks<br/>⏰ Freshness policies<br/>🚨 Business rules]
+        JOBS[🚀 Pipeline Jobs<br/>📅 4 job definitions<br/>🔄 Dependency management<br/>⚡ Parallel execution]
+        SCHEDULE[⏰ Automation<br/>📅 Daily/weekly schedules<br/>👁️ Data freshness sensors<br/>🔄 Event-driven triggers]
+    end
+
+    %% Monitoring & Observability
+    subgraph "📊 Monitoring & Observability"
+        DAGSTER_UI[🖥️ Dagster UI<br/>📊 Asset lineage<br/>📈 Run monitoring<br/>🔍 Check results<br/>📋 Metadata tracking]
+        DBT_DOCS[📚 dbt Docs<br/>🔗 Model lineage<br/>📋 Business glossary<br/>🧪 Test results]
+        GE_DOCS[📊 GE Data Docs<br/>✅ Validation reports<br/>📈 Data profiling<br/>📊 Quality trends]
+    end
+
+    %% CI/CD and Development
+    subgraph "🔧 Development & Deployment"
+        GITHUB[📦 GitHub Repository<br/>🔄 Version control<br/>🤖 Actions CI/CD<br/>🔑 OIDC authentication]
+        LOCAL_DEV[💻 Local Development<br/>🧪 dagster dev<br/>🔧 dbt development<br/>✅ Local validation]
+        PROD_DEPLOY[🚀 Production Deployment<br/>📦 Container-based<br/>☁️ Cloud infrastructure<br/>📊 Monitoring integration]
+    end
+
+    %% Business Intelligence
+    subgraph "📊 Business Intelligence"
+        BI_TOOLS[📈 BI Tools<br/>📊 Tableau/PowerBI<br/>📋 Executive dashboards<br/>💼 Investment analysis]
+        API_ACCESS[🔌 API Access<br/>📊 REST endpoints<br/>🔍 Query interface<br/>📱 Application integration]
+    end
+
+    %% Data Flow
+    EXT1 --> SCRIPT1
+    EXT2 --> SCRIPT2
+    EXT3 --> SCRIPT3
+    
+    SCRIPT1 --> LOCAL1
+    SCRIPT2 --> LOCAL1
+    SCRIPT3 --> LOCAL2
+    
+    LOCAL2 --> S3
+    S3 --> RAW1
+    S3 --> RAW2
+    S3 --> RAW3
+    
+    RAW1 --> STG1
+    RAW2 --> STG2
+    RAW3 --> STG3
+    
+    STG1 --> SNAP1
+    STG2 --> SNAP1
+    STG3 --> SNAP2
+    
+    SNAP1 --> DIM2
+    SNAP2 --> DIM3
+    STG1 --> FACT2
+    STG2 --> FACT1
+    STG3 --> FACT3
+    
+    DIM1 --> FACT1
+    DIM1 --> FACT2
+    DIM1 --> FACT3
+    DIM2 --> FACT1
+    DIM2 --> FACT2
+    DIM3 --> FACT3
+    DIM4 --> FACT1
+    DIM4 --> FACT2
+    DIM4 --> FACT3
+    
+    FACT1 --> MART1
+    FACT1 --> MART2
+    FACT1 --> MART3
+    FACT2 --> MART1
+    FACT2 --> MART2
+    FACT2 --> MART3
+    FACT3 --> MART3
+    DIM2 --> MART4
+    DIM3 --> MART5
+    DIM4 --> MART5
+
+    %% Tool Integration
+    DBT -.-> STG1
+    DBT -.-> STG2
+    DBT -.-> STG3
+    DBT -.-> SNAP1
+    DBT -.-> SNAP2
+    DBT -.-> DIM1
+    DBT -.-> DIM2
+    DBT -.-> DIM3
+    DBT -.-> DIM4
+    DBT -.-> FACT1
+    DBT -.-> FACT2
+    DBT -.-> FACT3
+    DBT -.-> MART1
+    DBT -.-> MART2
+    DBT -.-> MART3
+    DBT -.-> MART4
+    DBT -.-> MART5
+    
+    GE -.-> STG1
+    GE -.-> STG2
+    GE -.-> STG3
+    GE -.-> FACT1
+    GE -.-> FACT2
+    GE -.-> MART1
+    
+    ASSETS -.-> DBT
+    CHECKS -.-> GE
+    JOBS -.-> ASSETS
+    SCHEDULE -.-> JOBS
+    
+    %% Monitoring Integration
+    DAGSTER_UI -.-> ASSETS
+    DAGSTER_UI -.-> CHECKS
+    DAGSTER_UI -.-> JOBS
+    DBT_DOCS -.-> DBT
+    GE_DOCS -.-> GE
+    
+    %% Development Flow
+    GITHUB -.-> LOCAL_DEV
+    LOCAL_DEV -.-> GITHUB
+    GITHUB -.-> PROD_DEPLOY
+    GITHUB -.-> S3
+    
+    %% Business Access
+    MART1 --> BI_TOOLS
+    MART2 --> BI_TOOLS
+    MART3 --> BI_TOOLS
+    MART4 --> BI_TOOLS
+    MART5 --> BI_TOOLS
+    
+    MART1 --> API_ACCESS
+    MART2 --> API_ACCESS
+    MART3 --> API_ACCESS
+
+    %% Styling
+    classDef external fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
+    classDef processing fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef storage fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef warehouse fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef tooling fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef orchestration fill:#fff8e1,stroke:#ffa000,stroke-width:2px
+    classDef monitoring fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef deployment fill:#efebe9,stroke:#5d4037,stroke-width:2px
+    classDef business fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+
+    class EXT1,EXT2,EXT3 external
+    class SCRIPT1,SCRIPT2,SCRIPT3 processing
+    class LOCAL1,LOCAL2,S3,IAM storage
+    class RAW1,RAW2,RAW3,STG1,STG2,STG3,SNAP1,SNAP2,DIM1,DIM2,DIM3,DIM4,FACT1,FACT2,FACT3,MART1,MART2,MART3,MART4,MART5 warehouse
+    class DBT,GE tooling
+    class ASSETS,CHECKS,JOBS,SCHEDULE orchestration
+    class DAGSTER_UI,DBT_DOCS,GE_DOCS monitoring
+    class GITHUB,LOCAL_DEV,PROD_DEPLOY deployment
+    class BI_TOOLS,API_ACCESS business

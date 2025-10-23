@@ -1,0 +1,174 @@
+---
+title: Tampa Rent Signals - Data Quality Framework
+---
+graph TB
+    %% Data Quality Layers
+    subgraph "📊 Data Quality Validation Framework"
+        direction TB
+        
+        subgraph "🥉 Bronze Layer Validation"
+            BRONZE_CHECKS[📋 Raw Data Checks<br/>📁 File format validation<br/>📊 Schema compliance<br/>📅 Date range verification<br/>🔢 Basic data types]
+        end
+        
+        subgraph "🥈 Silver Layer - Staging Validation"
+            direction TB
+            STG_GE[🛡️ Great Expectations Suites<br/>📊 17 expectations for stg_aptlist<br/>📊 15 expectations for stg_zori<br/>📊 12 expectations for stg_fred]
+            
+            STG_APTLIST_CHECKS[stg_aptlist_suite<br/>✅ Row count: 1K-500K<br/>✅ Rent index: 0-2000<br/>✅ Population bounds<br/>✅ Data quality scores<br/>✅ Business key uniqueness]
+            
+            STG_ZORI_CHECKS[stg_zori_suite<br/>✅ Row count: 5K-1M<br/>✅ ZORI values: 500-8000<br/>✅ Metro size validation<br/>✅ State name format<br/>✅ Size category enum]
+            
+            STG_FRED_CHECKS[stg_fred_suite<br/>✅ FRED series ID format<br/>✅ CPI category validation<br/>✅ Seasonal adjustment<br/>✅ Value range checking<br/>✅ Reliability scoring]
+            
+            STG_FRESHNESS[⏰ Freshness Checks<br/>📅 Data < 24 hours old<br/>🔍 Source monitoring<br/>🚨 Staleness alerts]
+        end
+        
+        subgraph "🥈 Silver Layer - Core Validation"
+            direction TB
+            CORE_GE[🛡️ Great Expectations Suites<br/>📊 15 expectations for fact_rent_zori<br/>📊 13 expectations for fact_rent_aptlist]
+            
+            CORE_BUSINESS_RULES[🎯 Business Rule Checks<br/>📈 YoY growth bounds: -50% to +100%<br/>👥 Population > 0 and < 50M<br/>🔢 Fact table grain uniqueness<br/>📊 Calculated metrics validation<br/>🏆 Ranking consistency]
+            
+            CORE_INTEGRITY[🔗 Referential Integrity<br/>🔑 Dimension key existence<br/>📅 Date consistency<br/>🏷️ Category enumerations<br/>📊 Cross-table validation]
+        end
+        
+        subgraph "🥇 Gold Layer - Mart Validation"
+            direction TB
+            MART_GE[🛡️ Great Expectations Suites<br/>📊 12 expectations for mart_rent_trends<br/>📊 Additional mart validations]
+            
+            MART_COMPLETENESS[📋 Data Completeness<br/>📊 Key metrics < 5% null<br/>🎯 Investment scores present<br/>🌡️ Market temperature assigned<br/>💰 Rent values complete]
+            
+            MART_BUSINESS_METRICS[🎯 Business Metrics Validation<br/>🔥 Heat scores: 0-100 range<br/>💡 Investment scores: 1-100<br/>📈 Growth calculations accurate<br/>🎨 Temperature categories valid<br/>🏆 Rankings consistent]
+            
+            MART_FRESHNESS[⏰ Mart Freshness<br/>📅 Data < 72 hours old<br/>🔄 Refresh monitoring<br/>📊 SLA compliance]
+        end
+    end
+
+    %% Dagster Asset Checks Integration
+    subgraph "⚙️ Dagster Asset Checks Integration"
+        direction TB
+        
+        DAGSTER_QUALITY[🎯 Quality Asset Checks<br/>✅ 6 GE integration checks<br/>🔗 Automatic suite execution<br/>📊 Structured metadata capture<br/>🚨 Blocking vs warning severity]
+        
+        DAGSTER_FRESHNESS[⏰ Freshness Asset Checks<br/>✅ 4 SQL-based checks<br/>📅 Time-based validation<br/>⚡ Real-time monitoring<br/>🔍 Snowflake integration]
+        
+        DAGSTER_BUSINESS[🎯 Business Rule Asset Checks<br/>✅ 4 custom validation checks<br/>📊 Statistical validation<br/>🎨 Range checking<br/>📈 Trend analysis]
+        
+        CHECK_ORCHESTRATION[🔧 Check Orchestration<br/>🚫 Blocking checks stop pipeline<br/>⚠️ Warning checks allow continuation<br/>📊 Metadata aggregation<br/>📈 Success rate tracking]
+    end
+
+    %% Quality Monitoring
+    subgraph "📊 Quality Monitoring & Reporting"
+        direction TB
+        
+        GE_REPORTS[📋 Great Expectations Reports<br/>📊 HTML data docs<br/>📈 Validation trends<br/>🔍 Detailed failure analysis<br/>📅 Historical tracking]
+        
+        DAGSTER_MONITORING[🖥️ Dagster UI Monitoring<br/>✅ Asset check status<br/>📊 Run success rates<br/>🔍 Failure investigation<br/>📈 Performance metrics]
+        
+        OPERATIONAL_DASHBOARD[📊 Operational Dashboard<br/>🎯 mart_data_lineage<br/>📅 Data freshness status<br/>📊 Quality score trends<br/>🚨 SLA violations<br/>📈 Reliability metrics]
+        
+        ALERTING[🚨 Alerting & Notifications<br/>📧 Email alerts<br/>💬 Slack integration<br/>📱 Mobile notifications<br/>🔔 Escalation policies]
+    end
+
+    %% Quality Enforcement Flow
+    subgraph "🛡️ Quality Enforcement Workflow"
+        direction LR
+        
+        INGESTION[📥 Data Ingestion<br/>🔍 Initial validation]
+        
+        STAGING_GATE[🚪 Staging Quality Gate<br/>🛡️ Blocking validation<br/>🚫 Stop on critical failure<br/>⚠️ Continue with warnings]
+        
+        CORE_GATE[🚪 Core Quality Gate<br/>📊 Business rule validation<br/>🔗 Integrity checking<br/>📈 Metric validation]
+        
+        MART_GATE[🚪 Mart Quality Gate<br/>📋 Completeness validation<br/>🎯 Business metric checks<br/>⏰ Freshness verification]
+        
+        CONSUMPTION[📊 Data Consumption<br/>✅ Quality assured<br/>📈 Monitored usage<br/>🔍 Continuous validation]
+    end
+
+    %% Quality Metrics
+    subgraph "📈 Quality Metrics & KPIs"
+        direction TB
+        
+        COVERAGE_METRICS[📊 Validation Coverage<br/>✅ 100+ total expectations<br/>📊 Layer-specific coverage<br/>🎯 Business rule coverage<br/>📈 Coverage trending]
+        
+        SUCCESS_METRICS[📈 Success Rate Metrics<br/>✅ Pipeline success rate<br/>📊 Check pass rates<br/>🎯 SLA compliance<br/>⏰ Time to resolution]
+        
+        DATA_HEALTH[🏥 Data Health Scores<br/>🎯 Overall quality score<br/>📊 Source reliability scores<br/>🔍 Anomaly detection rates<br/>📈 Quality trending]
+    end
+
+    %% Data Flow with Quality Gates
+    BRONZE_CHECKS --> STG_GE
+    STG_GE --> STG_APTLIST_CHECKS
+    STG_GE --> STG_ZORI_CHECKS
+    STG_GE --> STG_FRED_CHECKS
+    STG_FRESHNESS --> STAGEGATE_PASS[✅ Staging Gate Passed]
+    
+    STAGEGATE_PASS --> CORE_GE
+    CORE_GE --> CORE_BUSINESS_RULES
+    CORE_BUSINESS_RULES --> CORE_INTEGRITY
+    CORE_INTEGRITY --> COREGATE_PASS[✅ Core Gate Passed]
+    
+    COREGATE_PASS --> MART_GE
+    MART_GE --> MART_COMPLETENESS
+    MART_COMPLETENESS --> MART_BUSINESS_METRICS
+    MART_BUSINESS_METRICS --> MART_FRESHNESS
+    MART_FRESHNESS --> MARTGATE_PASS[✅ Mart Gate Passed]
+    
+    %% Dagster Integration
+    STG_APTLIST_CHECKS -.-> DAGSTER_QUALITY
+    STG_ZORI_CHECKS -.-> DAGSTER_QUALITY
+    STG_FRED_CHECKS -.-> DAGSTER_QUALITY
+    STG_FRESHNESS -.-> DAGSTER_FRESHNESS
+    CORE_BUSINESS_RULES -.-> DAGSTER_BUSINESS
+    MART_BUSINESS_METRICS -.-> DAGSTER_BUSINESS
+    MART_FRESHNESS -.-> DAGSTER_FRESHNESS
+    
+    DAGSTER_QUALITY --> CHECK_ORCHESTRATION
+    DAGSTER_FRESHNESS --> CHECK_ORCHESTRATION
+    DAGSTER_BUSINESS --> CHECK_ORCHESTRATION
+    
+    %% Monitoring Integration
+    CHECK_ORCHESTRATION --> DAGSTER_MONITORING
+    STG_GE --> GE_REPORTS
+    CORE_GE --> GE_REPORTS
+    MART_GE --> GE_REPORTS
+    
+    MARTGATE_PASS --> OPERATIONAL_DASHBOARD
+    DAGSTER_MONITORING --> ALERTING
+    GE_REPORTS --> ALERTING
+    OPERATIONAL_DASHBOARD --> ALERTING
+    
+    %% Quality Workflow
+    INGESTION --> STAGING_GATE
+    STAGING_GATE -->|Pass| CORE_GATE
+    STAGING_GATE -->|Fail| ALERTING
+    CORE_GATE -->|Pass| MART_GATE
+    CORE_GATE -->|Fail| ALERTING
+    MART_GATE -->|Pass| CONSUMPTION
+    MART_GATE -->|Fail| ALERTING
+    
+    %% Metrics Integration
+    CHECK_ORCHESTRATION --> COVERAGE_METRICS
+    DAGSTER_MONITORING --> SUCCESS_METRICS
+    OPERATIONAL_DASHBOARD --> DATA_HEALTH
+
+    %% Styling
+    classDef bronzeStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef stagingStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef coreStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef martStyle fill:#fff8e1,stroke:#ff6f00,stroke-width:2px
+    classDef dagsterStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef monitoringStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef workflowStyle fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef metricsStyle fill:#efebe9,stroke:#5d4037,stroke-width:2px
+    classDef passStyle fill:#c8e6c9,stroke:#2e7d32,stroke-width:3px
+
+    class BRONZE_CHECKS bronzeStyle
+    class STG_GE,STG_APTLIST_CHECKS,STG_ZORI_CHECKS,STG_FRED_CHECKS,STG_FRESHNESS stagingStyle
+    class CORE_GE,CORE_BUSINESS_RULES,CORE_INTEGRITY coreStyle
+    class MART_GE,MART_COMPLETENESS,MART_BUSINESS_METRICS,MART_FRESHNESS martStyle
+    class DAGSTER_QUALITY,DAGSTER_FRESHNESS,DAGSTER_BUSINESS,CHECK_ORCHESTRATION dagsterStyle
+    class GE_REPORTS,DAGSTER_MONITORING,OPERATIONAL_DASHBOARD,ALERTING monitoringStyle
+    class INGESTION,STAGING_GATE,CORE_GATE,MART_GATE,CONSUMPTION workflowStyle
+    class COVERAGE_METRICS,SUCCESS_METRICS,DATA_HEALTH metricsStyle
+    class STAGEGATE_PASS,COREGATE_PASS,MARTGATE_PASS passStyle

@@ -1,0 +1,170 @@
+---
+title: Tampa Rent Signals - Deployment Architecture
+---
+graph TB
+    %% Development Environment
+    subgraph "💻 Development Environment"
+        DEV_LOCAL[🖥️ Local Development<br/>🐍 Python virtual env<br/>🔧 dagster dev<br/>🧪 dbt development<br/>✅ Local validation]
+        
+        DEV_IDE[📝 IDE Integration<br/>🔧 VS Code extensions<br/>🔍 dbt Power User<br/>📊 SQL formatting<br/>🧪 Interactive debugging]
+        
+        DEV_TESTING[🧪 Local Testing<br/>✅ Unit tests<br/>🔗 Integration tests<br/>📊 Data validation<br/>🚀 Pipeline testing]
+    end
+
+    %% Version Control & CI/CD
+    subgraph "📦 Version Control & CI/CD"
+        GITHUB[📦 GitHub Repository<br/>🔄 Version control<br/>🌿 Feature branches<br/>🔀 Pull requests<br/>📋 Code reviews]
+        
+        GITHUB_ACTIONS[🤖 GitHub Actions<br/>✅ Automated testing<br/>🔍 Code quality checks<br/>📦 Container builds<br/>🚀 Automated deployment]
+        
+        DOCKER_BUILD[🐳 Container Build<br/>📦 Multi-stage builds<br/>🔒 Security scanning<br/>📊 Size optimization<br/>🏷️ Version tagging]
+        
+        SECRETS_MGMT[🔐 Secrets Management<br/>🔑 GitHub Secrets<br/>🛡️ Environment variables<br/>🔒 Encrypted storage<br/>🎫 OIDC tokens]
+    end
+
+    %% Cloud Infrastructure
+    subgraph "☁️ Production Cloud Infrastructure"
+        direction TB
+        
+        subgraph "🪣 AWS Infrastructure"
+            S3_PROD[🪣 S3 Production Bucket<br/>🔐 Encrypted at rest<br/>📁 Lifecycle policies<br/>🔄 Cross-region replication<br/>📊 Access logging]
+            
+            IAM_PROD[🔑 IAM Production Roles<br/>👤 Least-privilege access<br/>🎫 Cross-account roles<br/>🔒 MFA requirements<br/>📋 Policy validation]
+            
+            CLOUDWATCH[📊 CloudWatch Monitoring<br/>📈 Metrics & alarms<br/>📋 Log aggregation<br/>🚨 Alert notifications<br/>📊 Custom dashboards]
+        end
+        
+        subgraph "🏔️ Snowflake Production"
+            SF_WAREHOUSE[🏔️ Snowflake Warehouse<br/>⚡ Auto-scaling compute<br/>🔒 Role-based access<br/>📊 Query monitoring<br/>💰 Cost optimization]
+            
+            SF_DATABASES[🗄️ Production Databases<br/>🥉 RENTS.RAW<br/>🥈 RENTS.STAGING<br/>🥈 RENTS.CORE<br/>🥇 RENTS.MARTS<br/>📸 RENTS.SNAPSHOTS]
+            
+            SF_EXTERNAL_STAGE[📁 External Stages<br/>🔗 S3 integration<br/>🔒 Secure access<br/>📊 File format detection<br/>🔄 Incremental loading]
+        end
+        
+        subgraph "🚀 Container Orchestration"
+            direction TB
+            CONTAINER_REGISTRY[📦 Container Registry<br/>🐳 Docker images<br/>🔒 Vulnerability scanning<br/>🏷️ Version management<br/>🔄 Automated cleanup]
+            
+            KUBERNETES[☸️ Kubernetes Cluster<br/>🚀 Pod orchestration<br/>📊 Resource management<br/>🔄 Auto-scaling<br/>🛡️ Security policies]
+            
+            DAGSTER_DEPLOYMENT[⚙️ Dagster Deployment<br/>🖥️ Dagster webserver<br/>⚙️ Dagster daemon<br/>📊 User code servers<br/>🔄 Auto-restart policies]
+        end
+    end
+
+    %% Monitoring & Observability
+    subgraph "📊 Production Monitoring"
+        direction TB
+        
+        APPLICATION_MONITORING[📊 Application Monitoring<br/>🖥️ Dagster UI<br/>📈 Asset lineage<br/>✅ Check results<br/>📊 Run history<br/>🚨 Failure alerts]
+        
+        INFRASTRUCTURE_MONITORING[🏗️ Infrastructure Monitoring<br/>📊 Resource utilization<br/>🔍 Log aggregation<br/>📈 Performance metrics<br/>🚨 System alerts]
+        
+        DATA_MONITORING[📊 Data Quality Monitoring<br/>📋 GE data docs<br/>✅ Validation results<br/>📈 Quality trends<br/>🎯 SLA tracking]
+        
+        ALERTING_SYSTEM[🚨 Alerting System<br/>📧 Email notifications<br/>💬 Slack integration<br/>📱 PagerDuty escalation<br/>🔔 Alert routing]
+    end
+
+    %% Business Access Layer
+    subgraph "📊 Business Access Layer"
+        direction TB
+        
+        BI_PRODUCTION[📈 Business Intelligence<br/>📊 Tableau Server<br/>📋 PowerBI Premium<br/>📈 Executive dashboards<br/>💼 Self-service analytics]
+        
+        API_GATEWAY[🔌 API Gateway<br/>🔒 Authentication<br/>📊 Rate limiting<br/>📈 Usage analytics<br/>🔍 Request logging]
+        
+        DATA_CATALOG[📚 Data Catalog<br/>🔍 Data discovery<br/>📋 Metadata management<br/>🏷️ Data lineage<br/>👥 User access control]
+    end
+
+    %% Security & Compliance
+    subgraph "🔒 Security & Compliance"
+        direction TB
+        
+        SECURITY_SCANNING[🔍 Security Scanning<br/>🔒 Container scanning<br/>📊 Dependency checks<br/>🛡️ Code analysis<br/>🚨 Vulnerability alerts]
+        
+        ACCESS_CONTROL[🔑 Access Control<br/>👤 RBAC implementation<br/>🎫 SSO integration<br/>📋 Audit logging<br/>🔒 Least privilege]
+        
+        COMPLIANCE_MONITORING[📋 Compliance Monitoring<br/>📊 Data retention<br/>🔒 Encryption validation<br/>📋 Audit trails<br/>📊 Compliance reports]
+        
+        BACKUP_RECOVERY[💾 Backup & Recovery<br/>🔄 Automated backups<br/>⚡ Point-in-time recovery<br/>🧪 Disaster recovery testing<br/>📊 Recovery metrics]
+    end
+
+    %% Deployment Flow
+    DEV_LOCAL --> GITHUB
+    DEV_IDE --> GITHUB
+    DEV_TESTING --> GITHUB
+    
+    GITHUB --> GITHUB_ACTIONS
+    GITHUB_ACTIONS --> DOCKER_BUILD
+    GITHUB_ACTIONS --> SECRETS_MGMT
+    
+    DOCKER_BUILD --> CONTAINER_REGISTRY
+    SECRETS_MGMT --> IAM_PROD
+    
+    CONTAINER_REGISTRY --> KUBERNETES
+    KUBERNETES --> DAGSTER_DEPLOYMENT
+    
+    %% Data Flow
+    DAGSTER_DEPLOYMENT --> S3_PROD
+    S3_PROD --> SF_EXTERNAL_STAGE
+    SF_EXTERNAL_STAGE --> SF_DATABASES
+    
+    %% Monitoring Integration
+    DAGSTER_DEPLOYMENT --> APPLICATION_MONITORING
+    KUBERNETES --> INFRASTRUCTURE_MONITORING
+    SF_DATABASES --> DATA_MONITORING
+    
+    APPLICATION_MONITORING --> ALERTING_SYSTEM
+    INFRASTRUCTURE_MONITORING --> ALERTING_SYSTEM
+    DATA_MONITORING --> ALERTING_SYSTEM
+    
+    %% Business Access
+    SF_DATABASES --> BI_PRODUCTION
+    SF_DATABASES --> API_GATEWAY
+    SF_DATABASES --> DATA_CATALOG
+    
+    %% Security Integration
+    GITHUB_ACTIONS --> SECURITY_SCANNING
+    KUBERNETES --> ACCESS_CONTROL
+    SF_DATABASES --> COMPLIANCE_MONITORING
+    SF_DATABASES --> BACKUP_RECOVERY
+    
+    %% Monitoring of Infrastructure
+    S3_PROD --> CLOUDWATCH
+    IAM_PROD --> CLOUDWATCH
+    SF_WAREHOUSE --> INFRASTRUCTURE_MONITORING
+    CLOUDWATCH --> ALERTING_SYSTEM
+
+    %% Environment Promotion Flow
+    subgraph "🔄 Environment Promotion"
+        direction LR
+        ENV_DEV[💻 Development<br/>🧪 Feature development<br/>✅ Local testing<br/>🔧 Rapid iteration]
+        
+        ENV_STAGING[🎭 Staging<br/>🔍 Integration testing<br/>📊 Data validation<br/>🚀 Release preparation]
+        
+        ENV_PROD[🚀 Production<br/>📊 Live data processing<br/>👥 Business users<br/>📈 SLA monitoring]
+        
+        ENV_DEV --> ENV_STAGING
+        ENV_STAGING --> ENV_PROD
+    end
+
+    %% Styling
+    classDef developmentStyle fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
+    classDef cicdStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef awsStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef snowflakeStyle fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    classDef containerStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef monitoringStyle fill:#fff8e1,stroke:#ffa000,stroke-width:2px
+    classDef businessStyle fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef securityStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef environmentStyle fill:#efebe9,stroke:#5d4037,stroke-width:2px
+
+    class DEV_LOCAL,DEV_IDE,DEV_TESTING developmentStyle
+    class GITHUB,GITHUB_ACTIONS,DOCKER_BUILD,SECRETS_MGMT cicdStyle
+    class S3_PROD,IAM_PROD,CLOUDWATCH awsStyle
+    class SF_WAREHOUSE,SF_DATABASES,SF_EXTERNAL_STAGE snowflakeStyle
+    class CONTAINER_REGISTRY,KUBERNETES,DAGSTER_DEPLOYMENT containerStyle
+    class APPLICATION_MONITORING,INFRASTRUCTURE_MONITORING,DATA_MONITORING,ALERTING_SYSTEM monitoringStyle
+    class BI_PRODUCTION,API_GATEWAY,DATA_CATALOG businessStyle
+    class SECURITY_SCANNING,ACCESS_CONTROL,COMPLIANCE_MONITORING,BACKUP_RECOVERY securityStyle
+    class ENV_DEV,ENV_STAGING,ENV_PROD environmentStyle
