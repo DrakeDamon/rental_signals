@@ -1,0 +1,215 @@
+version: 2
+
+models:
+  # Analytics Marts
+  - name: mart_rent_trends
+    description: "Business-ready rent trend analysis combining all data sources with unified metrics"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1000    # Minimum expected trend records
+          max_value: 1000000 # Reasonable upper bound
+    columns:
+      - name: month_date
+        description: "Month of the rent measurement"
+        tests:
+          - not_null
+      - name: data_source
+        description: "Source of the rent data"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Zillow ZORI', 'ApartmentList']
+      - name: rent_value
+        description: "Rent index or dollar value"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 15000
+      - name: market_temperature
+        description: "Market heat classification based on YoY growth"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Very Hot', 'Hot', 'Warm', 'Cool', 'Cold', 'Frozen']
+      - name: affordability_category
+        description: "Rent affordability classification"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Very Expensive', 'Expensive', 'Moderate', 'Affordable', 'Very Affordable']
+      - name: investment_attractiveness_score
+        description: "Investment attractiveness score (0-100)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              strictly: false
+      - name: data_freshness
+        description: "Data freshness indicator"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Fresh', 'Stale', 'Very Stale']
+
+  - name: mart_market_rankings
+    description: "Market competitiveness rankings with heat scores and investment metrics"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 50   # Minimum expected markets
+          max_value: 1000 # Reasonable upper bound
+    columns:
+      - name: location_name
+        description: "Name of the market/location"
+        tests:
+          - not_null
+          - unique
+      - name: market_heat_score
+        description: "Composite market heat score (0-100)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      - name: market_classification
+        description: "Market classification based on heat score"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Superstar Market', 'Hot Market', 'Growing Market', 'Stable Market', 'Cool Market', 'Struggling Market']
+      - name: investment_recommendation
+        description: "Investment recommendation based on potential and stability"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Strong Buy', 'Buy', 'Hold', 'Caution', 'Avoid']
+      - name: risk_assessment
+        description: "Risk assessment for the market"
+        tests:
+          - not_null
+      - name: trend_momentum
+        description: "Current trend momentum classification"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Strong Upward', 'Moderate Upward', 'Stable Growth', 'Cooling', 'Strong Downward', 'Mixed Signals']
+
+  - name: mart_economic_correlation
+    description: "Rent vs CPI correlation analysis with inflation impact metrics"
+    columns:
+      - name: month_date
+        description: "Month of the economic analysis"
+        tests:
+          - not_null
+          - unique
+      - name: national_rent_yoy
+        description: "National year-over-year rent growth percentage"
+      - name: housing_cpi_yoy
+        description: "Housing CPI year-over-year change percentage"
+      - name: rent_housing_cpi_spread
+        description: "Difference between rent growth and housing CPI growth"
+      - name: economic_regime
+        description: "Current economic regime classification"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['High Inflation + Hot Rent Market', 'Moderate Inflation + Growing Rents', 'Low Inflation + Stable Rents', 'Stagflation Risk', 'Deflationary Pressure', 'Transitional Period']
+      - name: affordability_pressure
+        description: "Housing affordability pressure assessment"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Severe Affordability Crisis', 'Affordability Pressure', 'Balanced', 'Improving Affordability', 'Stable Affordability']
+      - name: policy_implications
+        description: "Policy implications based on rent-inflation dynamics"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Consider Rent Controls', 'Housing Supply Crisis', 'Economic Divergence', 'Market Equilibrium', 'Monitor Trends']
+
+  # Summary Marts
+  - name: mart_regional_summary
+    description: "State and national level aggregations with market characterization"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 10  # At least some states + national
+          max_value: 100 # All US states + territories + national
+    columns:
+      - name: aggregation_level
+        description: "Level of geographic aggregation"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['State', 'National']
+      - name: region_name
+        description: "Name of the region (state or 'United States')"
+        tests:
+          - not_null
+      - name: location_count
+        description: "Number of locations in this region"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 1000
+      - name: market_temperature
+        description: "Overall market temperature for the region"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Overheating', 'Very Hot', 'Hot', 'Warm', 'Cool', 'Cold', 'Frozen']
+      - name: market_stability
+        description: "Market stability assessment based on volatility"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Very Stable', 'Stable', 'Moderate Volatility', 'High Volatility', 'Extreme Volatility']
+      - name: affordability_classification
+        description: "Regional affordability classification"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Very Expensive', 'Expensive', 'Moderately Expensive', 'Moderate', 'Affordable', 'Very Affordable']
+
+  - name: mart_data_lineage
+    description: "Data quality monitoring and source system tracking for operational insights"
+    tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          value: 3  # Exactly 3 fact tables tracked
+    columns:
+      - name: table_name
+        description: "Name of the fact table being tracked"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['FACT_RENT_ZORI', 'FACT_RENT_APTLIST', 'FACT_ECONOMIC_INDICATOR']
+      - name: source_name
+        description: "Name of the data source"
+        tests:
+          - not_null
+      - name: record_count
+        description: "Total number of records in the table"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000000
+      - name: data_freshness_status
+        description: "Data freshness assessment"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Fresh', 'Stale', 'Very Stale']
+      - name: data_quality_status
+        description: "Overall data quality assessment"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Excellent', 'Good', 'Fair', 'Poor']
+      - name: overall_reliability_score
+        description: "Overall reliability score (0-100)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      - name: temporal_coverage
+        description: "Assessment of temporal data coverage"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Excellent Coverage (5+ years)', 'Good Coverage (3-5 years)', 'Fair Coverage (1-3 years)', 'Limited Coverage (<1 year)']
