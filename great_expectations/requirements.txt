@@ -1,0 +1,18 @@
+# Great Expectations and dependencies for Tampa Rent Signals data quality validation
+
+great-expectations[snowflake]==0.17.23
+sqlalchemy-snowflake>=1.4.7
+snowflake-connector-python>=3.3.1
+
+# Data quality and validation
+pandas>=1.5.0
+numpy>=1.24.0
+
+# Logging and utilities
+pyyaml>=6.0
+requests>=2.28.0
+
+# Optional: For advanced notifications and integrations
+# slack-sdk>=3.21.0  # For Slack notifications
+# jira>=3.4.0        # For Jira ticket creation
+# sendgrid>=6.9.0    # For email notifications

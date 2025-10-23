@@ -1,0 +1,170 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "stg_zori_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 5000,
+        "max_value": 1000000
+      },
+      "meta": {
+        "notes": "Zillow ZORI should have substantial metro data"
+      }
+    },
+    {
+      "expectation_type": "expect_table_column_count_to_equal",
+      "kwargs": {
+        "value": 16
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "regionid"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "regionid"
+      },
+      "meta": {
+        "notes": "Each regionid should appear only once in staging (after deduplication)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_name"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "month_date"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "zori_value"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "zori_value",
+        "min_value": 500,
+        "max_value": 8000,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "ZORI values should be within typical US metro rent ranges"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "size_rank",
+        "min_value": 1,
+        "max_value": 1000,
+        "mostly": 0.99
+      },
+      "meta": {
+        "notes": "Size rank should be reasonable for US metros"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "location_type",
+        "value_set": ["metro", "msa", "metropolitan"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "state_name",
+        "regex": "^[A-Z][a-z\\s]+$"
+      },
+      "meta": {
+        "notes": "State names should be properly formatted"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 1,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_type_list",
+      "kwargs": {
+        "column": "has_anomaly",
+        "type_list": ["BOOLEAN"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "metro_size_category",
+        "value_set": [
+          "Top 10 Metros",
+          "Major Metros (11-50)",
+          "Large Metros (51-100)",
+          "Medium Metros (101-200)",
+          "Small Metros (200+)"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "month_date",
+        "min_value": "2015-01-01",
+        "max_value": "2030-12-31",
+        "parse_strings_as_datetimes": true
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 8,
+        "max_value": 10
+      },
+      "meta": {
+        "notes": "Zillow data should have consistently high quality"
+      }
+    },
+    {
+      "expectation_type": "expect_column_proportion_of_unique_values_to_be_between",
+      "kwargs": {
+        "column": "location_name",
+        "min_value": 0.95,
+        "max_value": 1.0
+      },
+      "meta": {
+        "notes": "Metro names should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_max_to_be_between",
+      "kwargs": {
+        "column": "size_rank",
+        "min_value": 200,
+        "max_value": 1000
+      },
+      "meta": {
+        "notes": "Should include small metros in the dataset"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for Zillow ZORI staging data quality validation"
+  }
+}

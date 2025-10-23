@@ -1,0 +1,175 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "fact_rent_zori_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 10000,
+        "max_value": 2000000
+      },
+      "meta": {
+        "notes": "Fact table should have substantial historical data"
+      }
+    },
+    {
+      "expectation_type": "expect_table_column_count_to_equal",
+      "kwargs": {
+        "value": 21
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "time_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "source_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "zori_value"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "zori_value",
+        "min_value": 500,
+        "max_value": 8000,
+        "mostly": 0.95
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "yoy_pct_change",
+        "min_value": -50,
+        "max_value": 100,
+        "mostly": 0.98
+      },
+      "meta": {
+        "notes": "Year-over-year changes should be within reasonable bounds"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "mom_pct_change",
+        "min_value": -20,
+        "max_value": 20,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Month-over-month changes should be moderate"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 1,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_type_list",
+      "kwargs": {
+        "column": "has_anomaly",
+        "type_list": ["BOOLEAN"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "growth_category",
+        "value_set": [
+          "High Growth",
+          "Moderate Growth", 
+          "Low Growth",
+          "Slight Decline",
+          "Significant Decline",
+          "Insufficient History"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "national_rank",
+        "min_value": 1,
+        "max_value": 1000
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "national_percentile",
+        "min_value": 0,
+        "max_value": 1
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_equal",
+      "kwargs": {
+        "column": "record_count",
+        "value": 1
+      },
+      "meta": {
+        "notes": "Each fact record should represent exactly one observation"
+      }
+    },
+    {
+      "expectation_type": "expect_compound_columns_to_be_unique",
+      "kwargs": {
+        "column_list": ["time_key", "location_key", "source_key"]
+      },
+      "meta": {
+        "notes": "Fact table grain should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 7,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_stdev_to_be_between",
+      "kwargs": {
+        "column": "zori_value",
+        "min_value": 100,
+        "max_value": 2000
+      },
+      "meta": {
+        "notes": "ZORI values should have reasonable variation across markets"
+      }
+    },
+    {
+      "expectation_type": "expect_select_column_values_to_be_unique_within_record",
+      "kwargs": {
+        "column_list": ["regionid"]
+      },
+      "meta": {
+        "notes": "Business key should be unique within each record"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for Zillow ZORI fact table data quality validation"
+  }
+}

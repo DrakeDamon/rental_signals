@@ -1,0 +1,148 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "stg_aptlist_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 1000,
+        "max_value": 500000
+      },
+      "meta": {
+        "notes": "ApartmentList should have substantial data for analysis"
+      }
+    },
+    {
+      "expectation_type": "expect_table_column_count_to_equal",
+      "kwargs": {
+        "value": 18
+      },
+      "meta": {
+        "notes": "Staging model should have consistent column count"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_fips_code"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_name"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "month_date"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "rent_index"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "rent_index",
+        "min_value": 0,
+        "max_value": 2000,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Rent index should be within reasonable bounds, allowing 5% outliers"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "population",
+        "min_value": 0,
+        "max_value": 50000000,
+        "mostly": 0.98
+      },
+      "meta": {
+        "notes": "Population should be reasonable for US geographic areas"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "location_type",
+        "value_set": ["metro", "county", "state", "city", "zip"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 1,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_type_list",
+      "kwargs": {
+        "column": "has_anomaly",
+        "type_list": ["BOOLEAN"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "month_date",
+        "min_value": "2015-01-01",
+        "max_value": "2030-12-31",
+        "parse_strings_as_datetimes": true
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_business_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "location_business_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_content_hash"
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 7,
+        "max_value": 10
+      },
+      "meta": {
+        "notes": "Average data quality should be high"
+      }
+    },
+    {
+      "expectation_type": "expect_column_proportion_of_unique_values_to_be_between",
+      "kwargs": {
+        "column": "location_name",
+        "min_value": 0.8,
+        "max_value": 1.0
+      },
+      "meta": {
+        "notes": "Location names should be mostly unique"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for ApartmentList staging data quality validation"
+  }
+}

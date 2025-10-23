@@ -1,0 +1,114 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "mart_rent_trends_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 20000,
+        "max_value": 5000000
+      },
+      "meta": {
+        "notes": "Combined mart should have substantial cross-source data"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "month_date"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "data_source"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "data_source",
+        "value_set": ["Zillow ZORI", "ApartmentList"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "rent_value"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "market_temperature",
+        "value_set": ["Very Hot", "Hot", "Warm", "Cool", "Cold", "Frozen"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "affordability_category", 
+        "value_set": ["Very Expensive", "Expensive", "Moderate", "Affordable", "Very Affordable"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "volatility_category",
+        "value_set": ["High Volatility", "Medium Volatility", "Low Volatility"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "investment_attractiveness_score",
+        "min_value": 0,
+        "max_value": 100,
+        "mostly": 1.0
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "data_freshness",
+        "value_set": ["Fresh", "Stale", "Very Stale"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_distinct_values_to_contain_set",
+      "kwargs": {
+        "column": "data_source",
+        "value_set": ["Zillow ZORI", "ApartmentList"]
+      },
+      "meta": {
+        "notes": "Should include both major data sources"
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "investment_attractiveness_score",
+        "min_value": 30,
+        "max_value": 70
+      },
+      "meta": {
+        "notes": "Average investment score should be reasonable"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "days_since_data",
+        "min_value": 0,
+        "max_value": 1095
+      },
+      "meta": {
+        "notes": "Data shouldn't be more than 3 years old"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for rent trends mart business logic validation"
+  }
+}

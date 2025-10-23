@@ -1,0 +1,111 @@
+# Great Expectations Configuration for Tampa Rent Signals
+# Integrates with Snowflake and dbt models for comprehensive data quality
+
+config_version: 3.0
+
+# Data Context
+datasources:
+  snowflake_db:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      module_name: great_expectations.execution_engine
+      connection_string: "snowflake://${SNOWFLAKE_USER}:${SNOWFLAKE_PASSWORD}@${SNOWFLAKE_ACCOUNT}/${SNOWFLAKE_DATABASE}/${SNOWFLAKE_SCHEMA}?warehouse=${SNOWFLAKE_WAREHOUSE}&role=${SNOWFLAKE_ROLE}"
+    data_connectors:
+      default_inferred_data_connector:
+        class_name: InferredAssetSqlDataConnector
+        module_name: great_expectations.datasource.data_connector
+        include_schema_name: true
+      
+      # Connector for staging models
+      staging_connector:
+        class_name: ConfiguredAssetSqlDataConnector
+        module_name: great_expectations.datasource.data_connector
+        assets:
+          stg_aptlist:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: stg_aptlist
+            schema_name: DBT_DEV_STAGING
+          stg_zori:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: stg_zori
+            schema_name: DBT_DEV_STAGING
+          stg_fred:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: stg_fred
+            schema_name: DBT_DEV_STAGING
+      
+      # Connector for core models
+      core_connector:
+        class_name: ConfiguredAssetSqlDataConnector
+        module_name: great_expectations.datasource.data_connector
+        assets:
+          fact_rent_zori:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: fact_rent_zori
+            schema_name: DBT_DEV_CORE
+          fact_rent_aptlist:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: fact_rent_aptlist
+            schema_name: DBT_DEV_CORE
+          fact_economic_indicator:
+            class_name: Asset
+            module_name: great_expectations.datasource.data_connector.asset
+            table_name: fact_economic_indicator
+            schema_name: DBT_DEV_CORE
+
+# Expectations Store (local files for version control)
+expectations_store_name: expectations_store
+validations_store_name: validations_store
+evaluation_parameter_store_name: evaluation_parameter_store
+
+stores:
+  expectations_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectations/
+
+  validations_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/validations/
+
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore
+
+  checkpoint_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: checkpoints/
+
+# Data Documentation
+data_docs_sites:
+  local_site:
+    class_name: SiteBuilder
+    show_how_to_buttons: true
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/data_docs/local_site/
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+# Analytics and Usage Statistics
+anonymous_usage_statistics:
+  enabled: false
+  data_context_id: "rent-signals-data-quality"
+
+# Notebook and other configurations
+notebooks:
+config_variables_file_path: uncommitted/config_variables.yml
+
+# Checkpoints
+checkpoint_store_name: checkpoint_store

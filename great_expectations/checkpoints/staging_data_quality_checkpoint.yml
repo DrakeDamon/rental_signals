@@ -1,0 +1,58 @@
+# Checkpoint for staging model data quality validation
+# Runs after dbt staging models are materialized
+
+name: staging_data_quality_checkpoint
+config_version: 1.0
+
+template_name: 
+module_name: great_expectations.checkpoint
+
+class_name: Checkpoint
+
+run_name_template: "%Y%m%d-%H%M%S-staging-validation"
+
+validations:
+  - batch_request:
+      datasource_name: snowflake_db
+      data_connector_name: staging_connector
+      data_asset_name: stg_aptlist
+    expectation_suite_name: stg_aptlist_suite
+  
+  - batch_request:
+      datasource_name: snowflake_db
+      data_connector_name: staging_connector
+      data_asset_name: stg_zori
+    expectation_suite_name: stg_zori_suite
+    
+  - batch_request:
+      datasource_name: snowflake_db
+      data_connector_name: staging_connector
+      data_asset_name: stg_fred
+    expectation_suite_name: stg_fred_suite
+
+# Evaluation parameters
+evaluation_parameters: {}
+
+# Runtime configuration
+runtime_configuration: {}
+
+# Data Docs configuration  
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: store_evaluation_params
+    action:
+      class_name: StoreEvaluationParametersAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+      site_names: 
+        - local_site
+
+# Notify on failure (can be extended with Slack, email, etc.)
+# - name: send_slack_notification_on_validation_result
+#   action:
+#     class_name: SlackNotificationAction
+#     slack_webhook: ${SLACK_WEBHOOK}
+#     notify_on: failure

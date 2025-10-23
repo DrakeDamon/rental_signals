@@ -1,0 +1,62 @@
+# Checkpoint for core model data quality validation
+# Runs after dbt core models (facts/dimensions) are materialized
+
+name: core_data_quality_checkpoint
+config_version: 1.0
+
+template_name: 
+module_name: great_expectations.checkpoint
+
+class_name: Checkpoint
+
+run_name_template: "%Y%m%d-%H%M%S-core-validation"
+
+validations:
+  - batch_request:
+      datasource_name: snowflake_db
+      data_connector_name: core_connector
+      data_asset_name: fact_rent_zori
+    expectation_suite_name: fact_rent_zori_suite
+  
+  - batch_request:
+      datasource_name: snowflake_db
+      data_connector_name: core_connector
+      data_asset_name: fact_rent_aptlist
+    expectation_suite_name: fact_rent_aptlist_suite
+
+# Evaluation parameters for dynamic thresholds
+evaluation_parameters:
+  # Expected row count based on time range
+  expected_zori_min_rows: 10000
+  expected_aptlist_min_rows: 5000
+  
+  # Data freshness thresholds (days)
+  max_days_since_update: 45
+  
+  # Quality score thresholds
+  min_avg_quality_score: 7.0
+
+# Runtime configuration
+runtime_configuration: {}
+
+# Actions to take after validation
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: store_evaluation_params
+    action:
+      class_name: StoreEvaluationParametersAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+      site_names: 
+        - local_site
+
+# Can be extended with additional actions:
+# - name: send_email_on_failure
+#   action:
+#     class_name: EmailAction
+# - name: create_jira_ticket_on_failure  
+#   action:
+#     class_name: JiraAction

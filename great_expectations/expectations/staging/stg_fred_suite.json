@@ -1,0 +1,182 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "stg_fred_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 100,
+        "max_value": 50000
+      },
+      "meta": {
+        "notes": "FRED should have monthly economic indicators across multiple series"
+      }
+    },
+    {
+      "expectation_type": "expect_table_column_count_to_equal",
+      "kwargs": {
+        "value": 17
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "series_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "series_label"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "month_date"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "indicator_value"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "series_id",
+        "regex": "^[A-Z0-9]+$"
+      },
+      "meta": {
+        "notes": "FRED series IDs should be alphanumeric uppercase"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "category",
+        "value_set": [
+          "Housing CPI",
+          "Core CPI", 
+          "All Items CPI",
+          "Energy CPI",
+          "Food CPI",
+          "Other CPI"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "seasonal_adjustment",
+        "value_set": ["SA", "NSA", "Unknown"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "frequency",
+        "value_set": ["Monthly", "Quarterly", "Annual"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "indicator_value",
+        "min_value": 0,
+        "max_value": 1000,
+        "mostly": 0.98
+      },
+      "meta": {
+        "notes": "CPI values should be reasonable index values"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 1,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_type_list",
+      "kwargs": {
+        "column": "has_anomaly",
+        "type_list": ["BOOLEAN"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "month_date",
+        "min_value": "2015-01-01",
+        "max_value": "2030-12-31",
+        "parse_strings_as_datetimes": true
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "series_business_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "series_business_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "reliability_score",
+        "min_value": 8,
+        "max_value": 10
+      },
+      "meta": {
+        "notes": "FRED data should have consistently high reliability"
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 9,
+        "max_value": 10
+      },
+      "meta": {
+        "notes": "FRED data quality should be excellent"
+      }
+    },
+    {
+      "expectation_type": "expect_column_distinct_values_to_be_in_set",
+      "kwargs": {
+        "column": "source_name",
+        "value_set": ["Federal Reserve Economic Data"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_distinct_values_to_be_in_set",
+      "kwargs": {
+        "column": "source_system",
+        "value_set": ["FRED"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_distinct_values_to_contain_set",
+      "kwargs": {
+        "column": "category",
+        "value_set": ["Housing CPI", "All Items CPI"]
+      },
+      "meta": {
+        "notes": "Should include key CPI categories for rent analysis"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for FRED economic indicator staging data quality validation"
+  }
+}

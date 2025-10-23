@@ -1,0 +1,154 @@
+{
+  "data_asset_type": "Table",
+  "expectation_suite_name": "fact_rent_aptlist_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 5000,
+        "max_value": 1000000
+      }
+    },
+    {
+      "expectation_type": "expect_table_column_count_to_equal",
+      "kwargs": {
+        "value": 20
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "time_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "location_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "source_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "rent_index"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "rent_index",
+        "min_value": 50,
+        "max_value": 2000,
+        "mostly": 0.95
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "population",
+        "min_value": 1000,
+        "max_value": 50000000,
+        "mostly": 0.90
+      },
+      "meta": {
+        "notes": "Population should be reasonable for geographic areas"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "yoy_pct_change",
+        "min_value": -50,
+        "max_value": 150,
+        "mostly": 0.98
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "mom_pct_change",
+        "min_value": -25,
+        "max_value": 25,
+        "mostly": 0.95
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "growth_category",
+        "value_set": [
+          "Very High Growth",
+          "High Growth",
+          "Moderate Growth",
+          "Low Growth", 
+          "Slight Decline",
+          "Significant Decline",
+          "Insufficient History"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "market_classification",
+        "value_set": [
+          "Major Metro",
+          "Mid-Size Metro", 
+          "Small Metro",
+          "County"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 1,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_equal",
+      "kwargs": {
+        "column": "record_count",
+        "value": 1
+      }
+    },
+    {
+      "expectation_type": "expect_compound_columns_to_be_unique",
+      "kwargs": {
+        "column_list": ["time_key", "location_key", "source_key"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "data_quality_score",
+        "min_value": 6,
+        "max_value": 10
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "rent_per_1k_residents",
+        "min_value": 0,
+        "max_value": 50,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Rent per 1K residents should be reasonable metric"
+      }
+    }
+  ],
+  "meta": {
+    "great_expectations_version": "0.17.0",
+    "notes": "Expectation suite for ApartmentList fact table data quality validation"
+  }
+}
