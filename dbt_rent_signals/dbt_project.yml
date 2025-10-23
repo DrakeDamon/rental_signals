@@ -1,0 +1,105 @@
+# dbt Project Configuration for Tampa Rent Signals Data Warehouse
+# Migrates from legacy Snowflake stored procedures to modern dbt + Dagster + Great Expectations
+
+name: 'rent_signals'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'rent_signals'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+models:
+  rent_signals:
+    # Apply to all models in this project
+    +materialized: table
+    +on_schema_change: "fail"
+    
+    # Staging models - cleaned and standardized raw data
+    staging:
+      +materialized: view
+      +schema: staging
+      
+    # Core models - business entities and relationships  
+    core:
+      +materialized: table
+      +schema: core
+      
+      # Dimensions with SCD Type 2
+      dimensions:
+        +materialized: table
+        +post-hook: "{{ create_scd2_indexes() }}"
+        
+      # Fact tables with metrics
+      facts:
+        +materialized: table
+        +post-hook: "{{ create_fact_indexes() }}"
+        
+    # Marts - business-ready aggregated tables
+    marts:
+      +materialized: table
+      +schema: marts
+      
+      # Some marts as materialized views for performance
+      analytics:
+        +materialized: table
+        
+      # Summary tables
+      summaries:
+        +materialized: table
+
+# Snapshots for SCD Type 2 tracking
+snapshots:
+  rent_signals:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +unique_key: id
+    +updated_at: updated_at
+
+# Seeds configuration
+seeds:
+  rent_signals:
+    +schema: seeds
+
+# Testing configuration  
+tests:
+  rent_signals:
+    +store_failures: true
+    +schema: test_failures
+
+# Variables for flexible configuration
+vars:
+  # Date boundaries for incremental processing
+  start_date: '2015-01-01'
+  end_date: '2030-12-31'
+  
+  # Schema names in Snowflake
+  raw_schema: 'raw'
+  analytics_schema: 'analytics' 
+  gold_schema: 'gold'
+  
+  # Data quality thresholds
+  max_null_rate: 0.05  # 5% max null rate
+  min_row_count: 1000  # Minimum expected rows
+  
+  # Business logic parameters
+  anomaly_threshold: 2.0  # Standard deviations for outlier detection
+  quality_score_min: 5    # Minimum data quality score (1-10)
+
+# Dispatch configuration for package compatibility
+dispatch:
+  - macro_namespace: dbt_utils
+    search_order: ['rent_signals', 'dbt_utils']

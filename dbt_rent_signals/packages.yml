@@ -1,0 +1,23 @@
+# dbt Package Dependencies
+# Install with: dbt deps
+
+packages:
+  # Essential utilities for data transformations
+  - package: dbt-labs/dbt_utils
+    version: 1.1.1
+    
+  # SCD Type 2 snapshots and utilities
+  - package: dbt-labs/audit_helper
+    version: 0.9.0
+    
+  # Data quality and testing helpers
+  - package: calogica/dbt_expectations
+    version: 0.10.1
+    
+  # Date and time utilities
+  - package: calogica/dbt_date
+    version: 0.9.1
+    
+  # Snowflake-specific utilities
+  - package: dbt-labs/snowflake_utils
+    version: 0.3.0

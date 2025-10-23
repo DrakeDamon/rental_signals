@@ -1,0 +1,196 @@
+version: 2
+
+models:
+  - name: stg_aptlist
+    description: "Cleaned and standardized ApartmentList rent data with data quality scoring"
+    columns:
+      - name: location_fips_code
+        description: "FIPS code for geographic location"
+        tests:
+          - not_null
+      - name: regionid
+        description: "ApartmentList region identifier"
+      - name: location_name
+        description: "Standardized location name"
+        tests:
+          - not_null
+      - name: location_type
+        description: "Type of geographic area (metro, county, state)"
+      - name: state_name
+        description: "Standardized state name"
+      - name: county
+        description: "County name"
+      - name: metro
+        description: "Metropolitan area name"
+      - name: month_date
+        description: "Month of the rent estimate (first day of month)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'{{ var('start_date') }}'"
+              max_value: "'{{ var('end_date') }}'"
+      - name: rent_index
+        description: "ApartmentList rent index value"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 2000
+      - name: population
+        description: "Population estimate for the location"
+      - name: location_business_key
+        description: "Surrogate key based on location business identifiers"
+        tests:
+          - not_null
+          - unique
+      - name: location_content_hash
+        description: "Hash of location attributes for SCD2 change detection"
+        tests:
+          - not_null
+      - name: data_quality_score
+        description: "Data quality score from 1 (poor) to 10 (excellent)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+      - name: has_anomaly
+        description: "Flag indicating if rent value is a statistical outlier"
+        tests:
+          - not_null
+      - name: processed_at
+        description: "Timestamp when record was processed by dbt"
+        tests:
+          - not_null
+      - name: dbt_run_id
+        description: "dbt run identifier for lineage tracking"
+        tests:
+          - not_null
+
+  - name: stg_zori
+    description: "Cleaned and standardized Zillow ZORI rent data with data quality scoring"
+    columns:
+      - name: regionid
+        description: "Zillow region identifier (business key)"
+        tests:
+          - not_null
+          - unique
+      - name: size_rank
+        description: "Metro area size ranking by Zillow"
+      - name: location_name
+        description: "Metro area name"
+        tests:
+          - not_null
+      - name: location_type
+        description: "Type of region (typically 'metro')"
+      - name: state_name
+        description: "State name"
+      - name: month_date
+        description: "Month of the ZORI measurement (first day of month)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'{{ var('start_date') }}'"
+              max_value: "'{{ var('end_date') }}'"
+      - name: zori_value
+        description: "Zillow Observed Rent Index value in dollars"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 15000
+      - name: location_business_key
+        description: "Surrogate key based on region ID"
+        tests:
+          - not_null
+          - unique
+      - name: location_content_hash
+        description: "Hash of location attributes for SCD2 change detection"
+        tests:
+          - not_null
+      - name: data_quality_score
+        description: "Data quality score from 1 (poor) to 10 (excellent)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+      - name: has_anomaly
+        description: "Flag indicating if ZORI value is a statistical outlier"
+        tests:
+          - not_null
+      - name: metro_size_category
+        description: "Categorization of metro by size ranking"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Top 10 Metros', 'Major Metros (11-50)', 'Large Metros (51-100)', 'Medium Metros (101-200)', 'Small Metros (200+)']
+
+  - name: stg_fred
+    description: "Cleaned and standardized FRED economic indicator data with series categorization"
+    columns:
+      - name: series_id
+        description: "FRED series identifier (business key)"
+        tests:
+          - not_null
+          - unique
+      - name: series_label
+        description: "Human-readable series description"
+        tests:
+          - not_null
+      - name: month_date
+        description: "Month of the economic indicator (first day of month)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'{{ var('start_date') }}'"
+              max_value: "'{{ var('end_date') }}'"
+      - name: indicator_value
+        description: "Economic indicator value"
+        tests:
+          - not_null
+      - name: category
+        description: "Categorized type of CPI indicator"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Housing CPI', 'Core CPI', 'All Items CPI', 'Energy CPI', 'Food CPI', 'Other CPI']
+      - name: seasonal_adjustment
+        description: "Whether series is seasonally adjusted"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['SA', 'NSA', 'Unknown']
+      - name: frequency
+        description: "Data collection frequency"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['Monthly', 'Quarterly', 'Annual']
+      - name: series_business_key
+        description: "Surrogate key based on series ID"
+        tests:
+          - not_null
+          - unique
+      - name: series_content_hash
+        description: "Hash of series attributes for SCD2 change detection"
+        tests:
+          - not_null
+      - name: data_quality_score
+        description: "Data quality score from 1 (poor) to 10 (excellent)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10
+      - name: has_anomaly
+        description: "Flag indicating if indicator value is a statistical outlier"
+        tests:
+          - not_null
+      - name: reliability_score
+        description: "Source reliability score (FRED is highly reliable = 10)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 10

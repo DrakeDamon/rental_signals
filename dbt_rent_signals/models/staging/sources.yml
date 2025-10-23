@@ -1,0 +1,93 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw data tables in Snowflake loaded from CSV files via external stages"
+    database: RENTS
+    schema: RAW
+    
+    tables:
+      - name: aptlist_long
+        description: "ApartmentList rent estimates in long format by location and month"
+        columns:
+          - name: location_fips_code
+            description: "FIPS code for geographic location"
+            tests:
+              - not_null
+          - name: regionid
+            description: "ApartmentList region identifier"
+          - name: location_name
+            description: "Human-readable location name"
+            tests:
+              - not_null
+          - name: location_type
+            description: "Type of geographic area (metro, county, etc.)"
+          - name: state
+            description: "State name"
+          - name: county
+            description: "County name"
+          - name: metro
+            description: "Metropolitan area name"
+          - name: month
+            description: "Month of the rent estimate"
+            tests:
+              - not_null
+          - name: rent_index
+            description: "Rent index value"
+            tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 2000
+          - name: population
+            description: "Population estimate for the location"
+            
+      - name: zori_metro_long
+        description: "Zillow Observed Rent Index (ZORI) for metro areas in long format"
+        columns:
+          - name: regionid
+            description: "Zillow region identifier"
+            tests:
+              - not_null
+              - unique
+          - name: sizerank
+            description: "Size ranking of the metro area by Zillow"
+          - name: metro
+            description: "Metro area name"
+            tests:
+              - not_null
+          - name: region_type
+            description: "Type of region (typically 'metro')"
+          - name: state_name
+            description: "State name"
+          - name: month
+            description: "Month of the ZORI measurement"
+            tests:
+              - not_null
+          - name: zori
+            description: "Zillow Observed Rent Index value"
+            tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 15000
+                  
+      - name: fred_cpi_long
+        description: "Federal Reserve Economic Data CPI indicators in long format"
+        columns:
+          - name: series_id
+            description: "FRED series identifier"
+            tests:
+              - not_null
+          - name: label
+            description: "Human-readable series label"
+            tests:
+              - not_null
+          - name: month
+            description: "Month of the economic indicator"
+            tests:
+              - not_null
+          - name: value
+            description: "Economic indicator value"
+            tests:
+              - not_null

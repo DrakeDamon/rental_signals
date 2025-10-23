@@ -1,0 +1,31 @@
+# dbt Profile Configuration for Snowflake
+# Place this in ~/.dbt/profiles.yml or use environment variables
+
+rent_signals:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"  # mvc20409.us-east-1
+      user: "{{ env_var('SNOWFLAKE_USER') }}"        # DRAKEDAMON
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ACCOUNTADMIN') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'RENTS') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_XS') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'DBT_DEV') }}"
+      threads: 4
+      keepalives_idle: 240
+      search_path: "RENTS.RAW,RENTS.ANALYTICS"
+      
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ACCOUNTADMIN') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'RENTS') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_XS') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'DBT_PROD') }}"
+      threads: 8
+      keepalives_idle: 240
+      search_path: "RENTS.RAW,RENTS.ANALYTICS"

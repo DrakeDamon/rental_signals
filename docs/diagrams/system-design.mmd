@@ -1,0 +1,109 @@
+flowchart TD
+  %% ============== LAYERS ==============
+  subgraph S["External Data Sources (Free)"]
+    A1["Apartment List CSV (Tampa)"]
+    A2["Zillow Research: ZORI/ZORF"]
+    A3["HUD: FMR/SAFMR"]
+    A4["FRED: CPI Rent (Tampa)"]
+    A5["Shimberg (FL Housing)"]
+    A6["Census: TIGER/ACS + Geocoder"]
+  end
+
+  subgraph I["Ingestion & Staging"]
+    I0["Downloader/Scraper\n(robots + throttling)"]
+    I1["Landing Manifests"]
+  end
+
+  subgraph R["Raw Zone (Snowflake Stages)"]
+    R0[["@stg_internal / @ext_stage\nraw files + manifest.csv"]]
+  end
+
+  subgraph T["Transform & Modeling — dbt Core on Snowflake"]
+    T0["stg_* models\n(clean, standardize)"]
+    Tpii["PII masking\n(pre-embedding)"]
+    T1["core models\n(listings_std, price_events)"]
+    T2["marts & views\n(signals_today, daily_counts)"]
+    T3["Snowflake Streams & Tasks\n(incremental / CDC refresh)"]
+  end
+
+  subgraph O["Orchestration"]
+    O0["Dagster — Software-Defined Assets"]
+    O1["Dagster Asset Checks\n(freshness, null-rate, PII flags)"]
+    O2["Dagster Sensor\n(new raw drop)"]
+    O3["GitHub Actions (cron/CI)"]
+  end
+
+  subgraph G["Governance, Quality & Lineage"]
+    G0["JSON Schema Contracts\n(dim/listings_std)"]
+    G1["Great Expectations\n(row-count delta, not_null, accepted_values)"]
+    G2["OpenLineage → Marquez\n(lineage graph)"]
+  end
+
+  subgraph X["Search & Retrieval Indexing"]
+    X0["OpenSearch (BM25)\nindex: title, text, url, ts"]
+    X1["Postgres + pgvector\nvectors + metadata"]
+    X2["Snowflake Cortex Search\n(hybrid: keyword + vector)"]
+  end
+
+  subgraph SVC["Serving & Apps"]
+    S0["FastAPI Service\n/endpoints: /search /semantic /hybrid /signals"]
+    UI["Watchlist (Next.js/CLI)\nTop drops & signals"]
+  end
+
+  subgraph A["Analytics & Reporting — Snowflake"]
+    A0["Curated marts/views"]
+    A1r["Metrics & SLOs\n(p50/p95 latency, recall@k, cost notes)"]
+    A2r["Runbook & Incident\n(MTTR < 10m)"]
+  end
+
+  %% ============== FLOWS ==============
+  %% Sources → Ingest → Stage
+  A1 -->|CSV| I0
+  A2 -->|CSV| I0
+  A3 -->|CSV| I0
+  A4 -->|API/CSV| I0
+  A5 -->|CSV| I0
+  A6 -->|Batch Geocode| I0
+  I0 --> I1 --> R0
+
+  %% Stage → Transform (dbt on Snowflake)
+  O3 -->|scheduled| O0
+  O2 -->|on new raw| O0
+  O0 -->|runs| T0
+
+  %% Transform & Quality gates
+  T0 --> Tpii --> T1 --> T2
+  T3 -. "auto-refresh / MERGE" .- T1
+  G0 -. validate on PR/CI .- O3
+  G1 -. tests in CI & runtime .- O3
+  T0 -. contracts & GE gates .- G0
+  T1 -. contracts & GE gates .- G1
+
+  %% Lineage
+  O0 -. emits events .- G2
+  T0 -. lineage .- G2
+  T1 -. lineage .- G2
+  T2 -. lineage .- G2
+
+  %% Indexing paths
+  T2 -->|clean text| X0
+  T2 -->|embeddings build after PII mask| X1
+  T2 -. alternative path .-> X2
+
+  %% Serving
+  S0 -->|reads| X0
+  S0 -->|reads| X1
+  S0 -->|reads| X2
+  UI -->|reads| T2
+
+  %% Observability & Reporting
+  S0 --> A1r
+  X0 --> A1r
+  X1 --> A1r
+  X2 --> A1r
+  T2 --> A0 --> UI
+  A1r --> A2r
+
+  %% Notes: CI gates
+  O3 -->|CI: contracts + GE| G0
+  O3 -->|CI: contracts + GE| G1

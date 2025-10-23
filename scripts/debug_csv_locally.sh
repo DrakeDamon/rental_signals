@@ -9,7 +9,7 @@ set -euo pipefail
 # Configuration
 BUCKET="rent-signals-dev-dd"
 TODAY=$(date -u +%F)
-YESTERDAY=$(date -u -d '1 day ago' +%F)
+YESTERDAY=$(date -u -v-1d +%F)
 LOCAL_DIR="debug_csv"
 
 echo "🔍 CSV Pipeline Debug Script"

@@ -1,0 +1,443 @@
+-- ============================================================================
+-- GOLD LAYER VIEWS - BUSINESS-FRIENDLY ANALYTICS
+-- Rent Signals Data Warehouse - Production Views
+-- ============================================================================
+
+-- Create Gold Schema
+CREATE SCHEMA IF NOT EXISTS RENTS.GOLD;
+USE SCHEMA RENTS.GOLD;
+
+-- ============================================================================
+-- BUSINESS INTELLIGENCE VIEWS
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- VW_RENT_TRENDS: Comprehensive rent trend analysis
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW VW_RENT_TRENDS AS
+WITH current_month AS (
+    SELECT TIME_KEY FROM RENTS.ANALYTICS.DIM_TIME WHERE IS_CURRENT_MONTH = TRUE
+),
+rent_data AS (
+    -- Zillow ZORI data
+    SELECT 
+        dt.MONTH_DATE,
+        dt.YEAR,
+        dt.QUARTER,
+        dt.MONTH_NAME,
+        dl.LOCATION_NAME,
+        dl.LOCATION_TYPE,
+        dl.STATE_NAME,
+        dl.METRO_NAME,
+        'Zillow ZORI' AS DATA_SOURCE,
+        fr.ZORI_VALUE AS RENT_VALUE,
+        fr.YOY_CHANGE,
+        fr.YOY_PCT_CHANGE,
+        fr.MOM_CHANGE,
+        fr.MOM_PCT_CHANGE,
+        fr.SIZE_RANK,
+        dl.POPULATION,
+        fr.DATA_QUALITY_SCORE,
+        fr.HAS_ANOMALY,
+        'Absolute Dollar Amount' AS VALUE_TYPE,
+        'Metro' AS GEOGRAPHIC_LEVEL
+    FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+    JOIN RENTS.ANALYTICS.DIM_TIME dt ON fr.TIME_KEY = dt.TIME_KEY
+    JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+        AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+    
+    UNION ALL
+    
+    -- ApartmentList data
+    SELECT 
+        dt.MONTH_DATE,
+        dt.YEAR,
+        dt.QUARTER,
+        dt.MONTH_NAME,
+        dl.LOCATION_NAME,
+        dl.LOCATION_TYPE,
+        dl.STATE_NAME,
+        dl.METRO_NAME,
+        'ApartmentList' AS DATA_SOURCE,
+        fa.RENT_INDEX AS RENT_VALUE,
+        fa.YOY_CHANGE,
+        fa.YOY_PCT_CHANGE,
+        fa.MOM_CHANGE,
+        fa.MOM_PCT_CHANGE,
+        NULL AS SIZE_RANK,
+        fa.POPULATION,
+        fa.DATA_QUALITY_SCORE,
+        fa.HAS_ANOMALY,
+        'Index Value' AS VALUE_TYPE,
+        CASE 
+            WHEN dl.LOCATION_TYPE = 'metro' THEN 'Metro'
+            WHEN dl.LOCATION_TYPE = 'county' THEN 'County'
+            ELSE INITCAP(dl.LOCATION_TYPE)
+        END AS GEOGRAPHIC_LEVEL
+    FROM RENTS.ANALYTICS.FACT_RENT_APTLIST fa
+    JOIN RENTS.ANALYTICS.DIM_TIME dt ON fa.TIME_KEY = dt.TIME_KEY
+    JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fa.LOCATION_KEY = dl.LOCATION_KEY
+        AND fa.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+)
+SELECT 
+    *,
+    -- Add derived metrics
+    CASE 
+        WHEN POPULATION > 0 THEN RENT_VALUE / POPULATION * 1000
+        ELSE NULL 
+    END AS RENT_PER_1K_RESIDENTS,
+    RANK() OVER (PARTITION BY DATA_SOURCE, MONTH_DATE ORDER BY RENT_VALUE DESC) AS NATIONAL_RANK,
+    RANK() OVER (PARTITION BY DATA_SOURCE, STATE_NAME, MONTH_DATE ORDER BY RENT_VALUE DESC) AS STATE_RANK,
+    -- Trend indicators
+    CASE 
+        WHEN YOY_PCT_CHANGE > 10 THEN 'High Growth'
+        WHEN YOY_PCT_CHANGE > 5 THEN 'Moderate Growth'
+        WHEN YOY_PCT_CHANGE > 0 THEN 'Low Growth'
+        WHEN YOY_PCT_CHANGE > -5 THEN 'Slight Decline'
+        ELSE 'Significant Decline'
+    END AS GROWTH_CATEGORY,
+    -- Data freshness
+    DATEDIFF('DAY', MONTH_DATE, CURRENT_DATE()) AS DAYS_SINCE_DATA
+FROM rent_data;
+
+-- ----------------------------------------------------------------------------
+-- VW_MARKET_RANKINGS: Metro competitiveness and rankings
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW VW_MARKET_RANKINGS AS
+WITH latest_month AS (
+    SELECT MAX(TIME_KEY) AS LATEST_TIME_KEY 
+    FROM RENTS.ANALYTICS.DIM_TIME 
+    WHERE MONTH_DATE <= CURRENT_DATE()
+),
+market_metrics AS (
+    SELECT 
+        dl.LOCATION_NAME,
+        dl.STATE_NAME,
+        dl.METRO_NAME,
+        dl.POPULATION,
+        fr.ZORI_VALUE,
+        fr.YOY_PCT_CHANGE,
+        fr.SIZE_RANK,
+        -- Calculate percentiles
+        PERCENT_RANK() OVER (ORDER BY fr.ZORI_VALUE) AS ZORI_PERCENTILE,
+        PERCENT_RANK() OVER (ORDER BY fr.YOY_PCT_CHANGE) AS GROWTH_PERCENTILE,
+        PERCENT_RANK() OVER (ORDER BY dl.POPULATION) AS POPULATION_PERCENTILE,
+        -- Rankings
+        RANK() OVER (ORDER BY fr.ZORI_VALUE DESC) AS RENT_RANK,
+        RANK() OVER (ORDER BY fr.YOY_PCT_CHANGE DESC) AS GROWTH_RANK,
+        RANK() OVER (ORDER BY dl.POPULATION DESC) AS POPULATION_RANK,
+        -- Market categories
+        CASE 
+            WHEN dl.POPULATION >= 5000000 THEN 'Major Metro (5M+)'
+            WHEN dl.POPULATION >= 1000000 THEN 'Large Metro (1M-5M)'
+            WHEN dl.POPULATION >= 250000 THEN 'Medium Metro (250K-1M)'
+            ELSE 'Small Metro (<250K)'
+        END AS MARKET_SIZE_CATEGORY
+    FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+    JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+        AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+    JOIN latest_month lm ON fr.TIME_KEY = lm.LATEST_TIME_KEY
+)
+SELECT 
+    *,
+    -- Composite scoring
+    (ZORI_PERCENTILE * 0.4 + GROWTH_PERCENTILE * 0.4 + POPULATION_PERCENTILE * 0.2) AS MARKET_HEAT_SCORE,
+    CASE 
+        WHEN ZORI_PERCENTILE >= 0.8 AND GROWTH_PERCENTILE >= 0.8 THEN 'Hot Market'
+        WHEN ZORI_PERCENTILE >= 0.6 AND GROWTH_PERCENTILE >= 0.6 THEN 'Growing Market'
+        WHEN ZORI_PERCENTILE <= 0.2 AND GROWTH_PERCENTILE <= 0.2 THEN 'Cool Market'
+        WHEN GROWTH_PERCENTILE >= 0.8 THEN 'Emerging Market'
+        ELSE 'Stable Market'
+    END AS MARKET_CLASSIFICATION
+FROM market_metrics;
+
+-- ----------------------------------------------------------------------------
+-- VW_ECONOMIC_CORRELATION: Rent vs CPI relationship analysis
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW VW_ECONOMIC_CORRELATION AS
+WITH monthly_data AS (
+    SELECT 
+        dt.MONTH_DATE,
+        dt.YEAR,
+        dt.QUARTER,
+        -- National rent averages
+        AVG(CASE WHEN dl.LOCATION_TYPE = 'country' THEN fr.ZORI_VALUE END) AS NATIONAL_ZORI,
+        AVG(CASE WHEN dl.LOCATION_TYPE = 'metro' THEN fr.ZORI_VALUE END) AS METRO_AVG_ZORI,
+        -- Economic indicators
+        AVG(CASE WHEN des.CATEGORY = 'Housing CPI' THEN fei.INDICATOR_VALUE END) AS HOUSING_CPI,
+        AVG(CASE WHEN des.CATEGORY = 'All Items CPI' THEN fei.INDICATOR_VALUE END) AS ALL_ITEMS_CPI,
+        AVG(CASE WHEN des.CATEGORY = 'Core CPI' THEN fei.INDICATOR_VALUE END) AS CORE_CPI,
+        -- Changes
+        AVG(CASE WHEN des.CATEGORY = 'Housing CPI' THEN fei.YOY_PCT_CHANGE END) AS HOUSING_CPI_YOY,
+        AVG(CASE WHEN des.CATEGORY = 'All Items CPI' THEN fei.YOY_PCT_CHANGE END) AS ALL_CPI_YOY,
+        AVG(CASE WHEN fr.REGIONID = 102001 THEN fr.YOY_PCT_CHANGE END) AS NATIONAL_RENT_YOY
+    FROM RENTS.ANALYTICS.DIM_TIME dt
+    LEFT JOIN RENTS.ANALYTICS.FACT_RENT_ZORI fr ON dt.TIME_KEY = fr.TIME_KEY
+    LEFT JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+        AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+    LEFT JOIN RENTS.ANALYTICS.FACT_ECONOMIC_INDICATOR fei ON dt.TIME_KEY = fei.TIME_KEY
+    LEFT JOIN RENTS.ANALYTICS.DIM_ECONOMIC_SERIES des ON fei.SERIES_KEY = des.SERIES_KEY
+        AND fei.MONTH_DATE BETWEEN des.EFFECTIVE_DATE AND COALESCE(des.END_DATE, CURRENT_DATE())
+    WHERE dt.MONTH_DATE >= '2015-01-01'
+    GROUP BY dt.MONTH_DATE, dt.YEAR, dt.QUARTER
+)
+SELECT 
+    *,
+    -- Calculate spreads
+    NATIONAL_RENT_YOY - HOUSING_CPI_YOY AS RENT_CPI_SPREAD,
+    NATIONAL_RENT_YOY - ALL_CPI_YOY AS RENT_GENERAL_INFLATION_SPREAD,
+    -- Rolling averages
+    AVG(NATIONAL_RENT_YOY) OVER (ORDER BY MONTH_DATE ROWS BETWEEN 11 PRECEDING AND CURRENT ROW) AS RENT_YOY_12M_AVG,
+    AVG(HOUSING_CPI_YOY) OVER (ORDER BY MONTH_DATE ROWS BETWEEN 11 PRECEDING AND CURRENT ROW) AS HOUSING_CPI_12M_AVG,
+    -- Correlation indicators
+    CASE 
+        WHEN ABS(NATIONAL_RENT_YOY - HOUSING_CPI_YOY) <= 2 THEN 'Aligned'
+        WHEN NATIONAL_RENT_YOY > HOUSING_CPI_YOY + 2 THEN 'Rent Outpacing CPI'
+        ELSE 'CPI Outpacing Rent'
+    END AS CORRELATION_STATUS
+FROM monthly_data
+ORDER BY MONTH_DATE;
+
+-- ----------------------------------------------------------------------------
+-- VW_REGIONAL_SUMMARY: State and national aggregations
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW VW_REGIONAL_SUMMARY AS
+WITH latest_month AS (
+    SELECT MAX(TIME_KEY) AS LATEST_TIME_KEY 
+    FROM RENTS.ANALYTICS.DIM_TIME 
+    WHERE MONTH_DATE <= CURRENT_DATE()
+),
+state_aggregates AS (
+    SELECT 
+        'State' AS AGGREGATION_LEVEL,
+        dl.STATE_NAME AS REGION_NAME,
+        dl.STATE_NAME,
+        COUNT(DISTINCT dl.LOCATION_KEY) AS LOCATION_COUNT,
+        SUM(dl.POPULATION) AS TOTAL_POPULATION,
+        AVG(fr.ZORI_VALUE) AS AVG_ZORI,
+        MEDIAN(fr.ZORI_VALUE) AS MEDIAN_ZORI,
+        MIN(fr.ZORI_VALUE) AS MIN_ZORI,
+        MAX(fr.ZORI_VALUE) AS MAX_ZORI,
+        STDDEV(fr.ZORI_VALUE) AS ZORI_STDDEV,
+        AVG(fr.YOY_PCT_CHANGE) AS AVG_YOY_GROWTH,
+        MEDIAN(fr.YOY_PCT_CHANGE) AS MEDIAN_YOY_GROWTH,
+        COUNT(CASE WHEN fr.YOY_PCT_CHANGE > 5 THEN 1 END) AS HIGH_GROWTH_MARKETS,
+        COUNT(CASE WHEN fr.YOY_PCT_CHANGE < 0 THEN 1 END) AS DECLINING_MARKETS
+    FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+    JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+        AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+    JOIN latest_month lm ON fr.TIME_KEY = lm.LATEST_TIME_KEY
+    WHERE dl.STATE_NAME IS NOT NULL
+    GROUP BY dl.STATE_NAME
+    
+    UNION ALL
+    
+    SELECT 
+        'National' AS AGGREGATION_LEVEL,
+        'United States' AS REGION_NAME,
+        'US' AS STATE_NAME,
+        COUNT(DISTINCT dl.LOCATION_KEY) AS LOCATION_COUNT,
+        SUM(dl.POPULATION) AS TOTAL_POPULATION,
+        AVG(fr.ZORI_VALUE) AS AVG_ZORI,
+        MEDIAN(fr.ZORI_VALUE) AS MEDIAN_ZORI,
+        MIN(fr.ZORI_VALUE) AS MIN_ZORI,
+        MAX(fr.ZORI_VALUE) AS MAX_ZORI,
+        STDDEV(fr.ZORI_VALUE) AS ZORI_STDDEV,
+        AVG(fr.YOY_PCT_CHANGE) AS AVG_YOY_GROWTH,
+        MEDIAN(fr.YOY_PCT_CHANGE) AS MEDIAN_YOY_GROWTH,
+        COUNT(CASE WHEN fr.YOY_PCT_CHANGE > 5 THEN 1 END) AS HIGH_GROWTH_MARKETS,
+        COUNT(CASE WHEN fr.YOY_PCT_CHANGE < 0 THEN 1 END) AS DECLINING_MARKETS
+    FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+    JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+        AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+    JOIN latest_month lm ON fr.TIME_KEY = lm.LATEST_TIME_KEY
+)
+SELECT 
+    *,
+    -- Add rankings
+    RANK() OVER (PARTITION BY AGGREGATION_LEVEL ORDER BY AVG_ZORI DESC) AS RENT_RANK,
+    RANK() OVER (PARTITION BY AGGREGATION_LEVEL ORDER BY AVG_YOY_GROWTH DESC) AS GROWTH_RANK,
+    RANK() OVER (PARTITION BY AGGREGATION_LEVEL ORDER BY TOTAL_POPULATION DESC) AS POPULATION_RANK,
+    -- Add market characterization
+    CASE 
+        WHEN AVG_YOY_GROWTH > 10 THEN 'Very Hot'
+        WHEN AVG_YOY_GROWTH > 5 THEN 'Hot'
+        WHEN AVG_YOY_GROWTH > 2 THEN 'Warm'
+        WHEN AVG_YOY_GROWTH > 0 THEN 'Cool'
+        ELSE 'Cold'
+    END AS MARKET_TEMPERATURE,
+    ROUND(HIGH_GROWTH_MARKETS::FLOAT / LOCATION_COUNT * 100, 1) AS PCT_HIGH_GROWTH_MARKETS,
+    ROUND(DECLINING_MARKETS::FLOAT / LOCATION_COUNT * 100, 1) AS PCT_DECLINING_MARKETS
+FROM state_aggregates;
+
+-- ----------------------------------------------------------------------------
+-- VW_DATA_LINEAGE: Source tracking and data freshness
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW VW_DATA_LINEAGE AS
+WITH data_freshness AS (
+    SELECT 
+        'FACT_RENT_ZORI' AS TABLE_NAME,
+        ds.SOURCE_NAME,
+        ds.SOURCE_SYSTEM,
+        COUNT(*) AS RECORD_COUNT,
+        MAX(fr.MONTH_DATE) AS LATEST_DATA_DATE,
+        MAX(fr.LOAD_DATE) AS LATEST_LOAD_DATE,
+        MIN(fr.DATA_QUALITY_SCORE) AS MIN_QUALITY_SCORE,
+        AVG(fr.DATA_QUALITY_SCORE) AS AVG_QUALITY_SCORE,
+        COUNT(CASE WHEN fr.HAS_ANOMALY THEN 1 END) AS ANOMALY_COUNT,
+        COUNT(DISTINCT fr.TIME_KEY) AS UNIQUE_MONTHS,
+        COUNT(DISTINCT fr.LOCATION_KEY) AS UNIQUE_LOCATIONS
+    FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+    JOIN RENTS.ANALYTICS.DIM_DATA_SOURCE ds ON fr.SOURCE_KEY = ds.SOURCE_KEY
+    GROUP BY ds.SOURCE_NAME, ds.SOURCE_SYSTEM
+    
+    UNION ALL
+    
+    SELECT 
+        'FACT_RENT_APTLIST' AS TABLE_NAME,
+        ds.SOURCE_NAME,
+        ds.SOURCE_SYSTEM,
+        COUNT(*) AS RECORD_COUNT,
+        MAX(fa.MONTH_DATE) AS LATEST_DATA_DATE,
+        MAX(fa.LOAD_DATE) AS LATEST_LOAD_DATE,
+        MIN(fa.DATA_QUALITY_SCORE) AS MIN_QUALITY_SCORE,
+        AVG(fa.DATA_QUALITY_SCORE) AS AVG_QUALITY_SCORE,
+        COUNT(CASE WHEN fa.HAS_ANOMALY THEN 1 END) AS ANOMALY_COUNT,
+        COUNT(DISTINCT fa.TIME_KEY) AS UNIQUE_MONTHS,
+        COUNT(DISTINCT fa.LOCATION_KEY) AS UNIQUE_LOCATIONS
+    FROM RENTS.ANALYTICS.FACT_RENT_APTLIST fa
+    JOIN RENTS.ANALYTICS.DIM_DATA_SOURCE ds ON fa.SOURCE_KEY = ds.SOURCE_KEY
+    GROUP BY ds.SOURCE_NAME, ds.SOURCE_SYSTEM
+    
+    UNION ALL
+    
+    SELECT 
+        'FACT_ECONOMIC_INDICATOR' AS TABLE_NAME,
+        ds.SOURCE_NAME,
+        ds.SOURCE_SYSTEM,
+        COUNT(*) AS RECORD_COUNT,
+        MAX(fei.MONTH_DATE) AS LATEST_DATA_DATE,
+        MAX(fei.LOAD_DATE) AS LATEST_LOAD_DATE,
+        MIN(fei.DATA_QUALITY_SCORE) AS MIN_QUALITY_SCORE,
+        AVG(fei.DATA_QUALITY_SCORE) AS AVG_QUALITY_SCORE,
+        0 AS ANOMALY_COUNT,  -- Economic indicators don't have anomaly detection yet
+        COUNT(DISTINCT fei.TIME_KEY) AS UNIQUE_MONTHS,
+        COUNT(DISTINCT fei.SERIES_KEY) AS UNIQUE_LOCATIONS
+    FROM RENTS.ANALYTICS.FACT_ECONOMIC_INDICATOR fei
+    JOIN RENTS.ANALYTICS.DIM_DATA_SOURCE ds ON fei.SOURCE_KEY = ds.SOURCE_KEY
+    GROUP BY ds.SOURCE_NAME, ds.SOURCE_SYSTEM
+)
+SELECT 
+    *,
+    DATEDIFF('DAY', LATEST_DATA_DATE, CURRENT_DATE()) AS DAYS_SINCE_LATEST_DATA,
+    DATEDIFF('HOUR', LATEST_LOAD_DATE, CURRENT_TIMESTAMP()) AS HOURS_SINCE_LATEST_LOAD,
+    CASE 
+        WHEN DATEDIFF('DAY', LATEST_DATA_DATE, CURRENT_DATE()) <= 45 THEN 'Fresh'
+        WHEN DATEDIFF('DAY', LATEST_DATA_DATE, CURRENT_DATE()) <= 90 THEN 'Stale'
+        ELSE 'Very Stale'
+    END AS DATA_FRESHNESS_STATUS,
+    CASE 
+        WHEN AVG_QUALITY_SCORE >= 9 THEN 'Excellent'
+        WHEN AVG_QUALITY_SCORE >= 7 THEN 'Good'
+        WHEN AVG_QUALITY_SCORE >= 5 THEN 'Fair'
+        ELSE 'Poor'
+    END AS DATA_QUALITY_STATUS,
+    ROUND(ANOMALY_COUNT::FLOAT / RECORD_COUNT * 100, 2) AS ANOMALY_PERCENTAGE
+FROM data_freshness;
+
+-- ============================================================================
+-- MATERIALIZED VIEWS FOR PERFORMANCE
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- MV_MONTHLY_RENT_SUMMARY: Pre-aggregated monthly summaries
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE MATERIALIZED VIEW MV_MONTHLY_RENT_SUMMARY AS
+SELECT 
+    dt.TIME_KEY,
+    dt.MONTH_DATE,
+    dt.YEAR,
+    dt.QUARTER,
+    dl.STATE_NAME,
+    COUNT(DISTINCT fr.LOCATION_KEY) AS METRO_COUNT,
+    AVG(fr.ZORI_VALUE) AS AVG_ZORI,
+    MEDIAN(fr.ZORI_VALUE) AS MEDIAN_ZORI,
+    MIN(fr.ZORI_VALUE) AS MIN_ZORI,
+    MAX(fr.ZORI_VALUE) AS MAX_ZORI,
+    STDDEV(fr.ZORI_VALUE) AS ZORI_STDDEV,
+    AVG(fr.YOY_PCT_CHANGE) AS AVG_YOY_GROWTH,
+    MEDIAN(fr.YOY_PCT_CHANGE) AS MEDIAN_YOY_GROWTH,
+    COUNT(CASE WHEN fr.YOY_PCT_CHANGE > 5 THEN 1 END) AS HIGH_GROWTH_COUNT,
+    SUM(dl.POPULATION) AS TOTAL_POPULATION,
+    AVG(fr.ZORI_VALUE * dl.POPULATION) / AVG(dl.POPULATION) AS POPULATION_WEIGHTED_ZORI
+FROM RENTS.ANALYTICS.FACT_RENT_ZORI fr
+JOIN RENTS.ANALYTICS.DIM_TIME dt ON fr.TIME_KEY = dt.TIME_KEY
+JOIN RENTS.ANALYTICS.DIM_LOCATION dl ON fr.LOCATION_KEY = dl.LOCATION_KEY
+    AND fr.MONTH_DATE BETWEEN dl.EFFECTIVE_DATE AND COALESCE(dl.END_DATE, CURRENT_DATE())
+WHERE dl.STATE_NAME IS NOT NULL
+GROUP BY dt.TIME_KEY, dt.MONTH_DATE, dt.YEAR, dt.QUARTER, dl.STATE_NAME;
+
+-- ============================================================================
+-- VIEW COMMENTS AND DOCUMENTATION
+-- ============================================================================
+
+ALTER VIEW VW_RENT_TRENDS COMMENT = 'Comprehensive rent trend analysis combining Zillow and ApartmentList data with growth metrics and rankings';
+ALTER VIEW VW_MARKET_RANKINGS COMMENT = 'Metro market competitiveness rankings with heat scores and classifications';  
+ALTER VIEW VW_ECONOMIC_CORRELATION COMMENT = 'Analysis of rent trends vs CPI inflation with correlation indicators';
+ALTER VIEW VW_REGIONAL_SUMMARY COMMENT = 'State and national level aggregations with market characterization';
+ALTER VIEW VW_DATA_LINEAGE COMMENT = 'Data quality monitoring and source system tracking';
+ALTER MATERIALIZED VIEW MV_MONTHLY_RENT_SUMMARY COMMENT = 'Pre-aggregated monthly rent summaries by state for performance';
+
+-- ============================================================================
+-- SAMPLE QUERIES FOR BUSINESS USERS
+-- ============================================================================
+
+/*
+-- Top 10 fastest growing metros (current month)
+SELECT 
+    LOCATION_NAME,
+    STATE_NAME,
+    RENT_VALUE,
+    YOY_PCT_CHANGE,
+    GROWTH_CATEGORY
+FROM RENTS.GOLD.VW_RENT_TRENDS 
+WHERE DATA_SOURCE = 'Zillow ZORI'
+AND YEAR = YEAR(CURRENT_DATE())
+AND MONTH_NAME = (SELECT MONTH_NAME FROM RENTS.ANALYTICS.DIM_TIME WHERE IS_CURRENT_MONTH = TRUE)
+ORDER BY YOY_PCT_CHANGE DESC
+LIMIT 10;
+
+-- Rent vs inflation correlation by quarter
+SELECT 
+    YEAR,
+    QUARTER,
+    AVG(RENT_CPI_SPREAD) AS AVG_RENT_CPI_SPREAD,
+    AVG(RENT_YOY_12M_AVG) AS AVG_RENT_GROWTH,
+    AVG(HOUSING_CPI_12M_AVG) AS AVG_HOUSING_CPI
+FROM RENTS.GOLD.VW_ECONOMIC_CORRELATION
+WHERE YEAR >= 2020
+GROUP BY YEAR, QUARTER
+ORDER BY YEAR, QUARTER;
+
+-- Market heat scores by state
+SELECT 
+    STATE_NAME,
+    MARKET_HEAT_SCORE,
+    MARKET_CLASSIFICATION,
+    RENT_RANK,
+    GROWTH_RANK
+FROM RENTS.GOLD.VW_MARKET_RANKINGS
+WHERE MARKET_SIZE_CATEGORY = 'Major Metro (5M+)'
+ORDER BY MARKET_HEAT_SCORE DESC;
+
+-- Data quality dashboard
+SELECT 
+    SOURCE_NAME,
+    RECORD_COUNT,
+    DATA_FRESHNESS_STATUS,
+    DATA_QUALITY_STATUS,
+    ANOMALY_PERCENTAGE,
+    DAYS_SINCE_LATEST_DATA
+FROM RENTS.GOLD.VW_DATA_LINEAGE
+ORDER BY SOURCE_NAME;
+*/
