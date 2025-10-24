@@ -6,8 +6,8 @@ rent_signals:
   outputs:
     dev:
       type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"  # mvc20409.us-east-1
-      user: "{{ env_var('SNOWFLAKE_USER') }}"        # DRAKEDAMON
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
       password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
       role: "{{ env_var('SNOWFLAKE_ROLE', 'ACCOUNTADMIN') }}"
       database: "{{ env_var('SNOWFLAKE_DATABASE', 'RENTS') }}"
