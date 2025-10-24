@@ -5,6 +5,7 @@ A modern, production-ready data engineering pipeline for collecting, processing,
 ## 🏗️ Architecture Overview
 
 ### Data Flow Architecture
+
 The system implements a **Bronze → Silver → Gold** layered architecture with SCD Type 2 historical tracking:
 
 ```mermaid
@@ -101,8 +102,9 @@ flowchart TD
 ```
 
 ### Processing Layers
+
 1. **🥉 Bronze (RAW)**: Raw CSV files ingested from S3 with minimal processing
-2. **🥈 Silver (ANALYTICS)**: dbt-managed star schema with SCD Type 2 historical tracking  
+2. **🥈 Silver (ANALYTICS)**: dbt-managed star schema with SCD Type 2 historical tracking
 3. **🥇 Gold (BUSINESS)**: dbt mart models optimized for business analytics
 4. **⚙️ Orchestration**: Dagster software-defined assets with Great Expectations validation
 
@@ -158,7 +160,15 @@ flowchart TD
 
 ## 🚀 Quick Start
 
+### Table of Contents
+
+- Dagster-first quick start
+- dbt + Great Expectations pipeline (legacy)
+- RESTful API setup
+- Troubleshooting
+
 ### Prerequisites
+
 - **AWS CLI** configured with appropriate permissions
 - **Python 3.8+** with virtual environment support
 - **Snowflake account** with ACCOUNTADMIN privileges
@@ -201,7 +211,27 @@ python scripts/standardize.py
 ./scripts/test_pipeline_end_to_end.sh
 ```
 
-### 4. Modern dbt + Great Expectations Pipeline
+### 4. Dagster-first Orchestration (Recommended)
+
+```bash
+# Install Dagster project
+cd dagster_rent_signals
+pip install -e ".[dev]"
+
+# Start local Dagster UI
+dagster dev  # http://localhost:3000
+
+# Execute pipelines
+dagster job execute staging_pipeline
+dagster job execute core_pipeline
+dagster job execute marts_pipeline
+# Or run the full refresh
+dagster job execute full_refresh_pipeline
+```
+
+For detailed Dagster docs, see `dagster_rent_signals/README.md`.
+
+### 5. Modern dbt + Great Expectations Pipeline (Legacy)
 
 ```bash
 # Install dbt dependencies
@@ -214,7 +244,7 @@ cp profiles.yml ~/.dbt/profiles.yml
 
 # Run dbt pipeline
 dbt run --models staging
-dbt run --models core  
+dbt run --models core
 dbt run --models marts
 
 # Run data quality validation
@@ -222,7 +252,7 @@ cd ../great_expectations
 python validate_data_quality.py --layer all
 ```
 
-### 5. RESTful API Setup
+### 6. RESTful API Setup
 
 ```bash
 # Navigate to API directory
@@ -230,7 +260,7 @@ cd ../rent_signals_api
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your Snowflake credentials
+# Edit .env with your Snowflake credentials and settings
 
 # Install dependencies
 pip install -r requirements.txt
@@ -242,7 +272,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # http://localhost:8000/docs
 ```
 
-### 6. Legacy SQL Setup (Optional)
+### 7. Legacy SQL Setup (Optional)
 
 For the original stored procedure approach:
 
@@ -250,7 +280,7 @@ For the original stored procedure approach:
 -- 1. Run initial setup
 @sql/schema/snowflake_setup.sql
 
--- 2. Create star schema  
+-- 2. Create star schema
 @sql/schema/analytics_schema_ddl.sql
 
 -- 3. Deploy ETL procedures
@@ -369,9 +399,10 @@ erDiagram
 ```
 
 **Key Features:**
+
 - **🔄 SCD Type 2**: Historical tracking via dbt snapshots for dimensions that change over time
 - **📊 Pre-calculated Measures**: YoY/MoM changes computed in dbt models with window functions
-- **🛡️ Data Quality**: Great Expectations validation with 100+ business rule checks
+- **🛡️ Data Quality**: Great Expectations validation with comprehensive business rule checks
 - **⚡ Performance**: Clustered tables and optimized dbt materializations
 - **📋 Lineage**: Complete data lineage through dbt docs and Great Expectations
 - **🤖 Modern Stack**: dbt Core + Great Expectations + Dagster orchestration
@@ -379,6 +410,7 @@ erDiagram
 ### Analytics Layer
 
 Business-friendly dbt mart models for analytics:
+
 - **mart_rent_trends**: Comprehensive cross-source rent trend analysis with investment scoring
 - **mart_market_rankings**: Metro competitiveness rankings with heat scores and recommendations
 - **mart_economic_correlation**: Rent vs inflation correlation with policy implications
@@ -388,18 +420,21 @@ Business-friendly dbt mart models for analytics:
 ## 📊 Data Sources
 
 ### Zillow ZORI (Zillow Observed Rent Index)
+
 - **Coverage**: Metro areas across the United States
 - **Frequency**: Monthly updates
 - **Metrics**: Rent index values, year-over-year changes
 - **Format**: Wide format (monthly columns) → standardized to long format
 
 ### ApartmentList
+
 - **Coverage**: Counties and metro areas
 - **Frequency**: Monthly updates
 - **Metrics**: Rent estimates, population data
 - **Format**: Wide format (YYYY_MM columns) → standardized to long format
 
 ### Federal Reserve Economic Data (FRED)
+
 - **Coverage**: National economic indicators
 - **Frequency**: Monthly updates
 - **Metrics**: Consumer Price Index (CPI), Housing CPI
@@ -408,6 +443,7 @@ Business-friendly dbt mart models for analytics:
 ## 🔧 Modern Data Stack
 
 ### dbt Core - Analytics Engineering
+
 - **Staging Models**: Clean and standardize raw data with data quality scoring
 - **Core Models**: Star schema with SCD Type 2 snapshots for historical tracking
 - **Mart Models**: Business-ready analytics with pre-calculated metrics
@@ -415,14 +451,16 @@ Business-friendly dbt mart models for analytics:
 - **Documentation**: Auto-generated lineage and model documentation
 
 ### Great Expectations - Data Quality
-- **100+ Validation Rules**: Comprehensive business rule validation
+
+- **Validation Rules**: Comprehensive business rule validation
 - **Automated Checkpoints**: Pipeline-integrated quality gates
 - **Statistical Validation**: Outlier detection and range checking
 - **Data Profiling**: Automated data documentation and monitoring
 - **Failure Alerting**: Configurable notifications on quality issues
 
 ### Dagster - Orchestration
-- **Software-Defined Assets**: 15 assets covering all dbt models
+
+- **Software-Defined Assets**: Software-defined assets covering dbt models
 - **Asset Checks**: 12 comprehensive validation checks integrating Great Expectations
 - **Incremental Processing**: Smart re-computation of downstream assets
 - **Scheduling**: Daily and weekly automated execution
@@ -430,14 +468,30 @@ Business-friendly dbt mart models for analytics:
 - **Sensors**: Event-driven processing based on data freshness
 
 ### RESTful API - Data Access
-- **FastAPI Framework**: Production-ready API with automatic documentation
-- **Market Data Endpoints**: Real-time rental market analysis and trends
-- **Price Drop Detection**: Automated alerts for rental deals and opportunities
-- **Market Rankings**: Investment attractiveness and heat score analysis
-- **Economic Correlation**: Rent vs inflation analysis with policy insights
-- **Regional Analytics**: State and metro-level market summaries
+
+- **FastAPI Framework**: Production-ready API with automatic OpenAPI documentation
+- **9 Core Endpoints**: Market data, trends, comparisons, price drops, rankings, analytics
+- **Live Deployment**: Hosted on Render with auto-deploy from GitHub
+- **Interactive Docs**: Swagger UI and ReDoc for API exploration
+- **Error Handling**: Comprehensive HTTP status codes with structured JSON responses
+- **Input Validation**: Pydantic models with query parameter validation and sanitization
+- **Pagination Support**: Configurable limit/offset parameters for large datasets
+- **Health Monitoring**: Database connectivity checks and system status reporting
+
+#### API Endpoints Overview
+
+- **GET /v1/markets** - List rental markets with pagination and state filtering
+- **GET /v1/markets/{metro}/trends** - Historical rent trends with time series analysis
+- **GET /v1/markets/compare** - Side-by-side comparison of multiple metro areas
+- **GET /v1/prices/drops** - Markets with significant price drops for deal discovery
+- **GET /v1/rankings/top** - Top market rankings by growth, heat score, or investment potential
+- **GET /v1/economics/correlation** - Rent vs inflation correlation with policy insights
+- **GET /v1/regional/summary** - State and regional market aggregations
+- **GET /v1/data/lineage** - Data quality monitoring and lineage transparency
+- **GET /v1/health** - System health check for monitoring and observability
 
 ### Data Quality Framework
+
 - **Layer-Specific Validation**: Different standards for staging vs marts
 - **Business Rule Enforcement**: Rent growth limits, CPI validation
 - **Cross-Source Consistency**: Unified metrics across data sources
@@ -446,12 +500,14 @@ Business-friendly dbt mart models for analytics:
 ## 🔐 Security & Compliance
 
 ### AWS Security
+
 - **S3 Buckets**: Private with encryption at rest
 - **IAM Policies**: Least-privilege access controls
 - **OIDC Integration**: Keyless GitHub Actions authentication
 - **No Credentials**: Environment variable based configuration
 
 ### Data Governance
+
 - **Lineage Tracking**: Complete data provenance
 - **Version Control**: All code and configurations in Git
 - **Documentation**: Comprehensive inline and external docs
@@ -462,21 +518,25 @@ Business-friendly dbt mart models for analytics:
 ### Common Issues
 
 **CSV Loading Errors:**
+
 ```sql
 @sql/debug/debug_snowflake_csv.sql
 ```
 
 **Data Quality Issues:**
+
 ```sql
 SELECT * FROM RENTS.GOLD.VW_DATA_LINEAGE;
 ```
 
 **Local Validation:**
+
 ```bash
 ./scripts/debug_csv_locally.sh
 ```
 
 ### Debug Tools
+
 - Local CSV inspection scripts
 - Snowflake validation queries
 - End-to-end pipeline testing
@@ -488,21 +548,21 @@ SELECT * FROM RENTS.GOLD.VW_DATA_LINEAGE;
 
 ```sql
 -- Top 10 fastest growing rental markets
-SELECT 
+SELECT
     location_name,
     state_name,
     yoy_pct_change,
     rent_value,
     investment_attractiveness_score,
     market_temperature
-FROM mart_rent_trends 
+FROM mart_rent_trends
 WHERE data_source = 'Zillow ZORI'
   AND year = YEAR(CURRENT_DATE())
 ORDER BY yoy_pct_change DESC
 LIMIT 10;
 
 -- Market heat analysis with investment recommendations
-SELECT 
+SELECT
     location_name,
     state_name,
     market_heat_score,
@@ -514,7 +574,7 @@ WHERE market_size_category = 'Major Metro (5M+)'
 ORDER BY market_heat_score DESC;
 
 -- Economic correlation analysis
-SELECT 
+SELECT
     year,
     quarter,
     economic_regime,
@@ -530,7 +590,7 @@ ORDER BY year, quarter;
 
 ```sql
 -- Operational dashboard
-SELECT 
+SELECT
     table_name,
     source_name,
     data_freshness_status,
@@ -559,7 +619,14 @@ dbt docs serve
 
 ## 🛠️ Development
 
+### Security Notes
+
+- Do not commit secrets. Use `.env` files locally and environment variables in CI/CD.
+- The examples in this README use placeholders for credentials. Replace them locally only.
+- Review `infra/aws/README.md` for secure AWS setup guidance.
+
 ### Adding New Data Sources
+
 1. Create extraction script in `scripts/`
 2. Add transformation logic to `standardize.py`
 3. Update S3 structure and IAM policies
@@ -570,6 +637,7 @@ dbt docs serve
 8. Update Dagster assets (when implemented)
 
 ### Testing Strategy
+
 - **dbt tests**: Schema validation and business rules
 - **Great Expectations**: Comprehensive data quality validation
 - **Integration tests**: End-to-end pipeline validation
@@ -585,17 +653,27 @@ This project is for educational and analytical purposes. Data sources have their
 This project demonstrates modern data engineering best practices. The current implementation includes:
 
 **✅ Production Features Already Implemented:**
-- dbt Core for analytics engineering
-- Great Expectations for comprehensive data quality
-- SCD Type 2 historical tracking
-- Comprehensive business rule validation
-- Data lineage and documentation
-- Modular, testable codebase
 
-**🚀 Future Enhancements:**
-- Dagster orchestration (in progress)
-- Real-time data ingestion
-- Machine learning feature store
-- Advanced alerting and monitoring
-- Auto-scaling infrastructure
-- Data mesh architecture
+- **Modern Data Stack**: dbt Core for analytics engineering with Dagster orchestration
+- **Data Quality**: Great Expectations validation integrated into Dagster
+- **Historical Tracking**: SCD Type 2 implementation using dbt snapshots
+- **RESTful API**: Production-ready FastAPI with multiple endpoints for rental market analysis
+- **Cloud Deployment**: Render-deployed API with Snowflake integration
+- **Comprehensive Testing**: Data quality validation and API endpoint testing
+- **Data lineage and documentation**: Auto-generated via dbt docs and Dagster UI
+- **Modular Architecture**: Separation of concerns with clear dependencies
+
+**🚀 Recent Completions:**
+
+- **Dagster Orchestration**: Software-defined assets with asset checks
+- **RESTful API**: FastAPI application with market data, price analysis, and rankings endpoints
+- **Cloud Deployment**: Production deployment on Render with environment configuration
+- **Error Handling**: Comprehensive HTTP error responses with structured logging
+
+**🔮 Future Enhancements:**
+
+- Real-time data ingestion with streaming
+- Machine learning feature store integration
+- Advanced alerting and monitoring dashboards
+- Auto-scaling infrastructure with container orchestration
+- Data mesh architecture with domain-driven design
