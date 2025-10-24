@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+# Copy requirements and install Python dependencies (repo-root context on Render)
+COPY rent_signals_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ ./app/
+# Copy application code (from repo-root context)
+COPY rent_signals_api/app/ ./app/
 
 # Create logs directory
 RUN mkdir -p logs
