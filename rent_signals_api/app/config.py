@@ -5,7 +5,8 @@ Uses Pydantic Settings for type-safe environment variable handling.
 
 from functools import lru_cache
 from typing import Optional
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -43,10 +44,12 @@ class Settings(BaseSettings):
     # Optional: Redis Configuration (for future caching)
     redis_url: Optional[str] = Field(default=None, description="Redis connection URL")
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # Pydantic v2 settings configuration
+    model_config: SettingsConfigDict = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
 
 @lru_cache()
