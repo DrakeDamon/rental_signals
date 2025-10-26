@@ -1,0 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', sans-serif;
+    
+    /* Light theme colors */
+    --color-neutral-0: #FFFFFF;
+    --color-neutral-50: #F7FAFC;
+    --color-neutral-100: #F1F5F9;
+    --color-neutral-200: #E2E8F0;
+    --color-neutral-300: #CBD5E1;
+    --color-neutral-400: #94A3B8;
+    --color-neutral-500: #64748B;
+    --color-neutral-600: #475569;
+    --color-neutral-700: #334155;
+    --color-neutral-800: #1E293B;
+    --color-neutral-900: #0F172A;
+    
+    --color-brand-primary: #0057D9;
+    --color-brand-hover: #004BC0;
+    --color-brand-active: #003EAD;
+    --color-brand-focus: #002C7A;
+    
+    --color-accent-primary: #00A099;
+    --color-accent-hover: #009086;
+    --color-accent-active: #007C75;
+    --color-accent-focus: #005C56;
+    
+    --color-success: #28A745;
+    --color-success-hover: #218838;
+    --color-success-active: #1E7E34;
+    
+    --color-warning: #FFC107;
+    --color-warning-hover: #E0A800;
+    --color-warning-active: #C69500;
+    
+    --color-error: #DC3545;
+    --color-error-hover: #C82333;
+    --color-error-active: #BD2130;
+    
+    --color-info: #17A2B8;
+    --color-info-hover: #138496;
+    --color-info-active: #0F667D;
+  }
+  
+  .dark {
+    /* Dark theme colors */
+    --color-neutral-0: #0F172A;
+    --color-neutral-50: #1E293B;
+    --color-neutral-100: #334155;
+    --color-neutral-200: #475569;
+    --color-neutral-300: #64748B;
+    --color-neutral-400: #94A3B8;
+    --color-neutral-500: #AAB8C9;
+    --color-neutral-600: #CDD5DF;
+    --color-neutral-700: #E2E8F0;
+    --color-neutral-800: #F1F5F9;
+    --color-neutral-900: #FFFFFF;
+    
+    --color-brand-primary: #508FFF;
+    --color-brand-hover: #6AA3FF;
+    --color-brand-active: #397FFF;
+    --color-brand-focus: #235FD9;
+    
+    --color-accent-primary: #35CFC8;
+    --color-accent-hover: #2DB6B0;
+    --color-accent-active: #249C97;
+    --color-accent-focus: #176B69;
+    
+    --color-success: #28D17C;
+    --color-success-hover: #1DB869;
+    --color-success-active: #179B55;
+    
+    --color-warning: #FFC857;
+    --color-warning-hover: #E0B04B;
+    --color-warning-active: #C69840;
+    
+    --color-error: #F26D6D;
+    --color-error-hover: #D95A5A;
+    --color-error-active: #B84A4A;
+    
+    --color-info: #5AC8E8;
+    --color-info-hover: #48B2D4;
+    --color-info-active: #3A99BB;
+  }
+  
+  html {
+    height: 100%;
+  }
+  
+  body {
+    height: 100%;
+    @apply bg-neutral-0 text-neutral-900 antialiased;
+    font-family: var(--font-inter);
+  }
+  
+  /* Reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skeleton loader shimmer animation */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+  
+  .skeleton {
+    @apply bg-neutral-200 dark:bg-neutral-100;
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(
+      to right,
+      var(--color-neutral-200) 4%,
+      var(--color-neutral-100) 25%,
+      var(--color-neutral-200) 36%
+    );
+    background-size: 1000px 100%;
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+    }
+  }
+  
+  /* Focus visible styles */
+  .focus-visible:focus {
+    @apply outline-none ring-2 ring-brand ring-offset-2;
+  }
+  
+  /* Card lift effect */
+  .card-lift {
+    @apply transition-all duration-fast ease-standard;
+  }
+  
+  .card-lift:hover {
+    @apply -translate-y-1 shadow-md;
+  }
+}
+
