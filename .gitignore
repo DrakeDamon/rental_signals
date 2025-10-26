@@ -180,6 +180,7 @@ logs/
 
 # Explicitly allow public-facing documentation
 !README.md
+!**/README.md
 !LICENSE.md
 !CONTRIBUTING.md
 !docs/*.md
