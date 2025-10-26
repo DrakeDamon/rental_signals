@@ -1,5 +1,5 @@
 -- Macro to calculate year-over-year and month-over-month changes
-{% macro calculate_changes(value_column, partition_by, order_by='month_date') %}
+{% macro calculate_changes(value_column, partition_by, order_by='s.month_date') %}
     -- Year-over-year changes
     {{ value_column }} - lag({{ value_column }}, 12) over (
         partition by {{ partition_by }}

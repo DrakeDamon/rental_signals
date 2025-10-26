@@ -71,18 +71,18 @@ fact_data as (
         
         -- Ranking measures
         rank() over (
-            partition by s.month_date 
+            partition by t.time_key 
             order by s.rent_index desc
         ) as national_rank,
         
         rank() over (
-            partition by s.month_date, s.state_name 
+            partition by t.time_key, s.state_name 
             order by s.rent_index desc
         ) as state_rank,
         
         -- Percentile measures
         percent_rank() over (
-            partition by s.month_date 
+            partition by t.time_key 
             order by s.rent_index
         ) as national_percentile,
         
@@ -147,10 +147,12 @@ fact_data as (
         
     from staging_data s
     inner join time_dim t on 
-        year(s.month_date) * 100 + month(s.month_date) = t.time_key
+        (year(s.month_date) * 100 + month(s.month_date)) = t.time_key
     inner join location_dim l on 
         coalesce(s.location_fips_code, 'UNKNOWN') = coalesce(l.location_fips_code, 'UNKNOWN')
     cross join data_source_dim ds
+    where s.month_date is not null
+      and s.location_fips_code is not null
 )
 
 select * from fact_data

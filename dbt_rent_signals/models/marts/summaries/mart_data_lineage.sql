@@ -81,7 +81,7 @@ economic_lineage as (
         ds.source_name,
         ds.source_system,
         count(*) as record_count,
-        max(fei.month_date) as latest_data_date,
+        max(fei.observation_date) as latest_data_date,
         max(fei.load_date) as latest_load_date,
         min(fei.data_quality_score) as min_quality_score,
         avg(fei.data_quality_score) as avg_quality_score,
@@ -102,8 +102,8 @@ economic_lineage as (
         max(fei.yoy_pct_change) as max_yoy_growth,
         
         -- Data range
-        min(fei.month_date) as earliest_data_date,
-        count(distinct extract(year from fei.month_date)) as years_of_data
+        min(fei.observation_date) as earliest_data_date,
+        count(distinct extract(year from fei.observation_date)) as years_of_data
         
     from {{ ref('fact_economic_indicator') }} fei
     join {{ ref('dim_data_source') }} ds on fei.source_key = ds.source_key

@@ -32,7 +32,7 @@ fact_data as (
         
         -- Business keys for debugging
         s.series_id,
-        s.month_date,
+        s.month_date as observation_date,
         
         -- Measures
         s.indicator_value,
@@ -144,10 +144,11 @@ fact_data as (
         
     from staging_data s
     inner join time_dim t on 
-        year(s.month_date) * 100 + month(s.month_date) = t.time_key
+        (year(s.month_date) * 100 + month(s.month_date)) = t.time_key
     inner join series_dim es on 
         s.series_id = es.series_id
     cross join data_source_dim ds
+    where s.month_date is not null
 )
 
 select * from fact_data

@@ -18,11 +18,11 @@
     case
         when abs({{ value_column }} - avg({{ value_column }}) over (
             partition by {{ partition_by }}
-            order by month_date
+            order by s.month_date
             rows between {{ window_size }} preceding and {{ window_size }} following
         )) > {{ std_dev_threshold }} * stddev({{ value_column }}) over (
             partition by {{ partition_by }}
-            order by month_date
+            order by s.month_date
             rows between {{ window_size }} preceding and {{ window_size }} following
         ) then true
         else false

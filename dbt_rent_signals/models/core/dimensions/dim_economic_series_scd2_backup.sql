@@ -35,4 +35,3 @@ from {{ ref('stg_fred') }}
 -- Get distinct series (FRED data is already at series level)
 qualify row_number() over (partition by series_id order by month_date desc) = 1
 
-
