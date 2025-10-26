@@ -144,17 +144,29 @@ def validate_pagination(
 
 # Health check endpoints
 @app.head("/v1/health")
-@app.get("/v1/health", response_model=HealthStatus)
+@app.get("/v1/health")
 async def health_check():
     """Fast health check for monitoring systems."""
     try:
         db_healthy = await test_database_connection()
         
-        return HealthStatus(
-            status="healthy" if db_healthy else "degraded",
-            timestamp=datetime.utcnow(),
-            database="connected" if db_healthy else "disconnected",
-            version=settings.api_version
+        health_data = {
+            "status": "healthy" if db_healthy else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "database": "connected" if db_healthy else "disconnected",
+            "version": settings.api_version
+        }
+        
+        return StandardAPIResponse(
+            success=db_healthy,
+            data=health_data,
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=["Snowflake"],
+                quality_score=10.0 if db_healthy else 0.0
+            )
         )
     except Exception as e:
         logger.error("Health check failed", error=str(e))
