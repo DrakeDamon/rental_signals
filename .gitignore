@@ -1,23 +1,102 @@
-# Claude Code Documentation
-CLAUDE.md
+# ===================================================================
+# SENSITIVE DATA - DO NOT COMMIT
+# ===================================================================
 
-# Environment Variables
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*secret*
+*SECRET*
+*credentials*
+*CREDENTIALS*
+
+# API Keys and Tokens
+*api_key*
+*API_KEY*
+*token*
+*TOKEN*
+rent_signals_api/.env
 
 # AWS Credentials
 .aws/
+aws-exports.js
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
+# Snowflake credentials
+profiles.yml
+snowflake_*.json
+
+# ===================================================================
+# DATA FILES - PROTECT PROPRIETARY DATA
+# ===================================================================
+
+# All data layers (bronze/silver/gold)
+data/
+data/**/*
+**/data/bronze/**
+**/data/silver/**
+**/data/gold/**
+**/data/raw/**
+
+# Specific data formats
+*.csv
+*.parquet
+*.json
+!package*.json
+!tsconfig.json
+!dbt_project.yml
+!packages.yml
+!**/integration_tests/**/*.csv
+!**/dbt_packages/**/data/**/*.csv
+*.xlsx
+*.xls
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup and archive files
+*.bak
+*.backup
+*.old
+*.archive
+*.zip
+*.tar.gz
+*.7z
+
+# ===================================================================
+# SCRAPING & INGESTION LOGIC - PROPRIETARY
+# ===================================================================
+
+# Core scraping scripts (keep private)
+ingest/zillow_zori_pull.py
+ingest/apartmentlist_pull.py
+ingest/fred_tampa_rent_pull.py
+
+# Scraping output and logs
+ingest/logs/
+ingest/*.log
+ingest/*.html
+ingest/debug_*.txt
+ingest/test_*.txt
+ingest/*.csv
+ingest/*.parquet
+ingest/*.json
+
+# ===================================================================
+# STANDARD IGNORES
+# ===================================================================
+
+# Claude Code Documentation
+CLAUDE.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
@@ -27,12 +106,61 @@ pip-delete-this-directory.txt
 .Trashes
 ehthumbs.db
 Thumbs.db
+.AppleDouble
+.LSOverride
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# Dagster
+dagster_rent_signals/.dagster_home/
+dagster_rent_signals/dagster_home/
+dagster_rent_signals/__pycache__/
+dagster_rent_signals/**/__pycache__/
+
+# dbt
+dbt_rent_signals/target/
+dbt_rent_signals/dbt_packages/
+dbt_rent_signals/logs/
+dbt_rent_signals/compiled/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+.venv/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
 
 # Temporary files
 *.tmp
@@ -42,3 +170,24 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# ===================================================================
+# INTERNAL DOCUMENTATION - PROTECT STRATEGY & ANALYSIS
+# ===================================================================
+
+# Hide all markdown files by default
+*.md
+
+# Explicitly allow public-facing documentation
+!README.md
+!LICENSE.md
+!CONTRIBUTING.md
+!docs/*.md
+!docs/**/*.md
+
+# Keep internal documentation private:
+# - Analysis and status reports
+# - Security documentation  
+# - Pipeline debugging notes
+# - Architecture decisions
+# - Scraper documentation
