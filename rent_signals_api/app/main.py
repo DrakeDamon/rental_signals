@@ -174,7 +174,7 @@ async def health_check():
 
 
 # Market endpoints
-@app.get("/v1/markets", response_model=List[MarketSummary])
+@app.get("/v1/markets")
 async def get_markets(
     state: Optional[str] = Query(None, description="Filter by state name"),
     pagination: Dict[str, int] = Depends(validate_pagination)
@@ -200,7 +200,25 @@ async def get_markets(
         
         results = await execute_query(query, query_params)
         
-        return [MarketSummary(**row) for row in results]
+        # Get total count for pagination
+        total_count = len(results) if len(results) < pagination["limit"] else pagination["offset"] + len(results) + 1
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=total_count,
+                returned_count=len(results),
+                data_freshness=results[0].get('LAST_UPDATED') if results else None,
+                sources=['Zillow ZORI', 'ApartmentList'],
+                quality_score=None
+            ),
+            pagination=APIPagination(
+                limit=pagination["limit"],
+                offset=pagination["offset"],
+                has_more=len(results) == pagination["limit"]
+            )
+        )
         
     except HTTPException:
         raise
@@ -209,7 +227,7 @@ async def get_markets(
         raise HTTPException(status_code=500, detail="Failed to fetch markets")
 
 
-@app.get("/v1/markets/{metro_slug}/trends", response_model=TrendResponse)
+@app.get("/v1/markets/{metro_slug}/trends")
 async def get_market_trends(
     metro_slug: str,
     months: int = Query(12, ge=1, le=60, description="Number of months of historical data"),
@@ -238,19 +256,25 @@ async def get_market_trends(
                 detail=f"No data found for metro: {metro_slug}"
             )
         
-        # Convert results to trend data points
-        trends = [TrendDataPoint(**row) for row in results]
+        # Build response data
+        trend_data = {
+            "metro_name": results[0]["METRO_NAME"],
+            "state_name": results[0]["STATE_NAME"],
+            "data_source": data_source.value,
+            "trends": results,
+            "months_requested": months
+        }
         
-        return TrendResponse(
-            metro_name=results[0]["METRO_NAME"],
-            state_name=results[0]["STATE_NAME"], 
-            data_source=data_source,
-            trends=trends,
-            metadata={
-                "months_requested": months,
-                "data_source": data_source.value,
-                "records_returned": len(results)
-            }
+        return StandardAPIResponse(
+            success=True,
+            data=trend_data,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[-1].get('MONTH_DATE') if results else None,
+                sources=[data_source.value],
+                quality_score=None
+            )
         )
         
     except HTTPException:
@@ -260,7 +284,7 @@ async def get_market_trends(
         raise HTTPException(status_code=500, detail="Failed to fetch market trends")
 
 
-@app.get("/v1/markets/compare", response_model=MarketComparisonResponse)
+@app.get("/v1/markets/compare")
 async def compare_markets(
     metros: str = Query(..., description="Comma-separated list of metro slugs to compare")
 ):
@@ -289,15 +313,23 @@ async def compare_markets(
                 detail="No data found for the specified metro areas"
             )
         
-        markets = [MarketComparisonItem(**row) for row in results]
+        comparison_data = {
+            "markets": results,
+            "comparison_date": results[0]["COMPARISON_DATE"],
+            "metros_requested": metro_list,
+            "metros_found": len(results)
+        }
         
-        return MarketComparisonResponse(
-            markets=markets,
-            comparison_date=results[0]["COMPARISON_DATE"],
-            metadata={
-                "metros_requested": metro_list,
-                "metros_found": len(results)
-            }
+        return StandardAPIResponse(
+            success=True,
+            data=comparison_data,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get("COMPARISON_DATE"),
+                sources=['Zillow ZORI'],
+                quality_score=None
+            )
         )
         
     except HTTPException:
@@ -308,7 +340,7 @@ async def compare_markets(
 
 
 # Price endpoints
-@app.get("/v1/prices/drops", response_model=PriceDropsResponse)
+@app.get("/v1/prices/drops")
 async def get_price_drops(
     threshold: float = Query(5.0, ge=0.1, le=50.0, description="Minimum price drop percentage"),
     timeframe: str = Query("month", regex="^(week|month|quarter)$", description="Time period for price change"),
@@ -353,36 +385,21 @@ async def get_price_drops(
         
         total_count = await execute_count_query(count_query, count_params)
         
-        # Convert results to price drop objects
-        drops = [
-            PriceDrop(
-                metro_name=row["METRO_NAME"],
-                state_name=row["STATE_NAME"],
-                current_rent=row["CURRENT_RENT"],
-                price_change_pct=row["PRICE_CHANGE_PCT"],
-                change_period=timeframe,
-                market_temperature=row["MARKET_TEMPERATURE"],
-                month_date=row["MONTH_DATE"],
-                data_source=DataSource(row["DATA_SOURCE"])
-            )
-            for row in results
-        ]
-        
-        return PriceDropsResponse(
-            drops=drops,
-            pagination=PaginationMetadata(
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=total_count,
+                returned_count=len(results),
+                data_freshness=results[0].get('MONTH_DATE') if results else None,
+                sources=['Zillow ZORI'],
+                quality_score=None
+            ),
+            pagination=APIPagination(
                 limit=pagination["limit"],
                 offset=pagination["offset"],
-                count=len(drops),
-                total=total_count,
-                has_more=(pagination["offset"] + pagination["limit"]) < total_count,
-                next_offset=pagination["offset"] + pagination["limit"] if (pagination["offset"] + pagination["limit"]) < total_count else None
-            ),
-            filters={
-                "threshold": threshold,
-                "timeframe": timeframe,
-                "state": state
-            }
+                has_more=(pagination["offset"] + pagination["limit"]) < total_count
+            )
         )
         
     except HTTPException:
@@ -393,7 +410,7 @@ async def get_price_drops(
 
 
 # Ranking endpoints
-@app.get("/v1/rankings/top", response_model=RankingsResponse)
+@app.get("/v1/rankings/top")
 async def get_top_rankings(
     category: str = Query("growth", regex="^(growth|rent|heat_score|investment)$", description="Ranking category"),
     pagination: Dict[str, int] = Depends(validate_pagination)
@@ -411,23 +428,21 @@ async def get_top_rankings(
             "offset": pagination["offset"]
         })
         
-        rankings = [MarketRanking(**row) for row in results]
-        
-        return RankingsResponse(
-            category=category,
-            rankings=rankings,
-            pagination=PaginationMetadata(
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('MONTH_DATE') if results else None,
+                sources=['Zillow ZORI'],
+                quality_score=None
+            ),
+            pagination=APIPagination(
                 limit=pagination["limit"],
                 offset=pagination["offset"],
-                count=len(rankings),
-                total=len(rankings),  # Simplified for top rankings
-                has_more=len(rankings) == pagination["limit"],
-                next_offset=pagination["offset"] + pagination["limit"] if len(rankings) == pagination["limit"] else None
-            ),
-            metadata={
-                "category": category,
-                "description": f"Top markets ranked by {category}"
-            }
+                has_more=len(results) == pagination["limit"]
+            )
         )
         
     except HTTPException:
@@ -438,7 +453,7 @@ async def get_top_rankings(
 
 
 # Economic endpoints
-@app.get("/v1/economics/correlation", response_model=EconomicCorrelationResponse)
+@app.get("/v1/economics/correlation")
 async def get_economic_correlation(
     start_year: Optional[int] = Query(None, ge=2000, le=2030, description="Starting year for analysis"),
     pagination: Dict[str, int] = Depends(validate_pagination)
@@ -461,22 +476,21 @@ async def get_economic_correlation(
         
         results = await execute_query(query, query_params)
         
-        data = [EconomicCorrelationData(**row) for row in results]
-        
-        return EconomicCorrelationResponse(
-            data=data,
-            pagination=PaginationMetadata(
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('MONTH_DATE') if results else None,
+                sources=['Zillow ZORI', 'FRED'],
+                quality_score=None
+            ),
+            pagination=APIPagination(
                 limit=pagination["limit"],
                 offset=pagination["offset"],
-                count=len(data),
-                total=len(data),  # Simplified for economic data
-                has_more=len(data) == pagination["limit"],
-                next_offset=pagination["offset"] + pagination["limit"] if len(data) == pagination["limit"] else None
-            ),
-            metadata={
-                "start_year": start_year,
-                "description": "Economic correlation analysis between rent and inflation"
-            }
+                has_more=len(results) == pagination["limit"]
+            )
         )
         
     except HTTPException:
@@ -487,7 +501,7 @@ async def get_economic_correlation(
 
 
 # Regional endpoints
-@app.get("/v1/regional/summary", response_model=RegionalSummaryResponse)
+@app.get("/v1/regional/summary")
 async def get_regional_summary(
     state: Optional[str] = Query(None, description="Filter by state name"),
     pagination: Dict[str, int] = Depends(validate_pagination)
@@ -513,22 +527,21 @@ async def get_regional_summary(
         
         results = await execute_query(query, query_params)
         
-        summaries = [RegionalSummary(**row) for row in results]
-        
-        return RegionalSummaryResponse(
-            summaries=summaries,
-            pagination=PaginationMetadata(
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=datetime.utcnow(),
+                sources=['Zillow ZORI', 'ApartmentList'],
+                quality_score=None
+            ),
+            pagination=APIPagination(
                 limit=pagination["limit"],
                 offset=pagination["offset"],
-                count=len(summaries),
-                total=len(summaries),  # Simplified for regional data
-                has_more=len(summaries) == pagination["limit"],
-                next_offset=pagination["offset"] + pagination["limit"] if len(summaries) == pagination["limit"] else None
-            ),
-            metadata={
-                "state_filter": state,
-                "description": "Regional market summaries and trends"
-            }
+                has_more=len(results) == pagination["limit"]
+            )
         )
         
     except HTTPException:
@@ -539,21 +552,23 @@ async def get_regional_summary(
 
 
 # Metadata endpoints
-@app.get("/v1/data/lineage", response_model=DataLineageResponse)
+@app.get("/v1/data/lineage")
 async def get_data_lineage():
     """Get data lineage and quality information for transparency."""
     try:
         query = MetaQueries.get_data_lineage()
         results = await execute_query(query)
         
-        lineage = [DataLineageInfo(**row) for row in results]
-        
-        return DataLineageResponse(
-            lineage=lineage,
-            metadata={
-                "description": "Data lineage and quality monitoring information",
-                "tables_monitored": len(lineage)
-            }
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('LAST_UPDATED') if results else None,
+                sources=['Zillow ZORI', 'ApartmentList', 'FRED'],
+                quality_score=sum(r.get('OVERALL_RELIABILITY_SCORE', 0) for r in results) / len(results) if results else None
+            )
         )
         
     except HTTPException:
