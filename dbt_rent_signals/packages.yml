@@ -4,20 +4,16 @@
 packages:
   # Essential utilities for data transformations
   - package: dbt-labs/dbt_utils
-    version: 1.1.1
-    
+    version: 1.3.0
+
   # SCD Type 2 snapshots and utilities
   - package: dbt-labs/audit_helper
-    version: 0.9.0
-    
-  # Data quality and testing helpers
-  - package: calogica/dbt_expectations
-    version: 0.10.1
-    
+    version: 0.12.1
+
+  # Data quality and testing helpers (updated package name)
+  - package: metaplane/dbt_expectations
+    version: 0.10.3
+
   # Date and time utilities
   - package: calogica/dbt_date
-    version: 0.9.1
-    
-  # Snowflake-specific utilities
-  - package: dbt-labs/snowflake_utils
-    version: 0.3.0
+    version: 0.10.1

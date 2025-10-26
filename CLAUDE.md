@@ -37,6 +37,15 @@ export SNOWFLAKE_SCHEMA="<YOUR_DBT_SCHEMA>"           # e.g., DBT_DEV
 
 - `cd dagster_rent_signals && pip install -e ".[dev]"` - Install Dagster project
 - `dagster dev` - Start local Dagster UI (http://localhost:3000)
+
+#### Data Ingestion (New!)
+
+- `dagster asset materialize zillow_zori_ingestion` - Run Zillow ZORI ingestion (downloads, transforms, uploads to S3)
+- Navigate to Assets → ingestion group in Dagster UI for visual materialization
+- Automated monthly schedule runs on 2nd of each month at 3 AM EST
+
+#### dbt Pipeline Execution
+
 - `dagster job execute staging_pipeline` - Run staging pipeline
 - `dagster job execute core_pipeline` - Run core pipeline (after staging)
 - `dagster job execute marts_pipeline` - Run marts pipeline (after core)

@@ -1,0 +1,18 @@
+# Requirements for Zillow ZORI Data Ingestion
+# All dependencies are already installed in the project environment
+
+# HTTP client with retry logic
+requests>=2.32.0
+
+# HTML parsing for web scraping
+beautifulsoup4>=4.13.0
+
+# Data manipulation and CSV/Parquet handling
+pandas>=2.1.0
+
+# Parquet file format support
+pyarrow>=20.0.0
+
+# Date parsing utilities
+python-dateutil>=2.9.0
+
