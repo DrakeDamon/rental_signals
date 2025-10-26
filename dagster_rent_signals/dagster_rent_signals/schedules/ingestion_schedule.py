@@ -26,3 +26,4 @@ monthly_ingestion_schedule = ScheduleDefinition(
     description="Run data ingestion monthly on the 2nd day at 3 AM EST",
 )
 
+

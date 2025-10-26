@@ -16,3 +16,4 @@ pyarrow>=20.0.0
 # Date parsing utilities
 python-dateutil>=2.9.0
 
+

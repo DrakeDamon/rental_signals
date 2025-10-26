@@ -10,33 +10,69 @@ class MarketQueries:
     """SQL queries for market-related endpoints."""
     
     @staticmethod
+    def get_market_by_slug(metro_slug: str) -> str:
+        """Get detailed information for a specific market by slug."""
+        return f"""
+        SELECT 
+            l.location_business_key as metro_id,
+            l.metro_slug,
+            l.location_name as metro_name,
+            l.state_name,
+            l.latitude as lat,
+            l.longitude as lng,
+            l.market_size_category,
+            l.population,
+            rt.rent_value as current_rent,
+            rt.yoy_pct_change,
+            rt.mom_pct_change,
+            rt.market_temperature,
+            rt.data_quality_score,
+            rt.data_source,
+            rt.month_date as last_updated
+        FROM RENTS.ANALYTICS.DIM_LOCATION l
+        JOIN RENTS.MARTS.MART_RENT_TRENDS rt
+            ON l.location_business_key = rt.location_business_key
+        WHERE l.metro_slug = '{metro_slug}'
+          AND rt.month_date = (SELECT MAX(month_date) FROM RENTS.MARTS.MART_RENT_TRENDS)
+        LIMIT 1
+        """
+    
+    @staticmethod
     def get_markets_summary(
         state_filter: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> str:
-        """Get summary of all available markets."""
+        """Get summary of all available markets with geographic data."""
         base_query = """
         WITH latest_data AS (
             SELECT 
-                metro_name,
-                state_name,
-                data_source,
-                rent_value,
-                yoy_pct_change,
-                mom_pct_change,
-                market_temperature,
-                market_size_category,
-                population,
-                month_date,
+                l.location_business_key as metro_id,
+                l.metro_slug,
+                rt.metro_name,
+                rt.state_name,
+                rt.data_source,
+                rt.rent_value,
+                rt.yoy_pct_change,
+                rt.mom_pct_change,
+                rt.market_temperature,
+                rt.market_size_category,
+                rt.population,
+                l.latitude as lat,
+                l.longitude as lng,
+                rt.month_date as last_updated,
                 ROW_NUMBER() OVER (
-                    PARTITION BY metro_name, state_name, data_source 
-                    ORDER BY month_date DESC
+                    PARTITION BY rt.metro_name, rt.state_name, rt.data_source 
+                    ORDER BY rt.month_date DESC
                 ) as rn
-            FROM RENTS.MARTS.MART_RENT_TRENDS
-            WHERE month_date >= DATEADD(month, -3, CURRENT_DATE())
+            FROM RENTS.MARTS.MART_RENT_TRENDS rt
+            JOIN RENTS.ANALYTICS.DIM_LOCATION l
+                ON rt.location_business_key = l.location_business_key
+            WHERE rt.month_date >= DATEADD(month, -3, CURRENT_DATE())
         )
         SELECT 
+            metro_id,
+            metro_slug,
             metro_name,
             state_name,
             rent_value as current_rent,
@@ -45,7 +81,10 @@ class MarketQueries:
             market_temperature,
             market_size_category,
             population,
-            data_source
+            data_source,
+            lat,
+            lng,
+            last_updated
         FROM latest_data
         WHERE rn = 1
         """
@@ -139,6 +178,37 @@ class PriceQueries:
     """SQL queries for price-related endpoints."""
     
     @staticmethod
+    def get_featured_markets(limit: int = 10) -> str:
+        """Get top featured markets by growth and heat score."""
+        return f"""
+        SELECT 
+            l.location_business_key as metro_id,
+            l.metro_slug,
+            rt.metro_name,
+            rt.state_name,
+            rt.rent_value as current_rent,
+            rt.yoy_pct_change,
+            rt.mom_pct_change,
+            rt.market_temperature,
+            l.latitude as lat,
+            l.longitude as lng,
+            mr.market_heat_score,
+            rt.data_source,
+            rt.month_date as last_updated
+        FROM RENTS.MARTS.MART_RENT_TRENDS rt
+        JOIN RENTS.ANALYTICS.DIM_LOCATION l
+            ON rt.location_business_key = l.location_business_key
+        LEFT JOIN RENTS.MARTS.MART_MARKET_RANKINGS mr
+            ON rt.location_business_key = mr.location_business_key
+            AND rt.month_date = mr.month_date
+        WHERE rt.month_date = (SELECT MAX(month_date) FROM RENTS.MARTS.MART_RENT_TRENDS)
+          AND rt.data_quality_score >= 7
+        ORDER BY mr.market_heat_score DESC NULLS LAST,
+                 rt.yoy_pct_change DESC NULLS LAST
+        LIMIT {limit}
+        """
+    
+    @staticmethod
     def get_price_drops(
         threshold: float = 5.0,
         timeframe: str = "month",
@@ -210,6 +280,71 @@ class PriceQueries:
 
 class RankingQueries:
     """SQL queries for ranking endpoints."""
+    
+    @staticmethod
+    def get_heat_map_data() -> str:
+        """Get market heat scores with geographic coordinates for heat map visualization."""
+        return """
+        SELECT 
+            l.location_business_key as metro_id,
+            l.metro_slug,
+            l.location_name as metro_name,
+            l.state_name,
+            l.latitude as lat,
+            l.longitude as lng,
+            mr.market_heat_score,
+            mr.growth_rank,
+            mr.stability_rank,
+            rt.rent_value as current_rent,
+            rt.yoy_pct_change,
+            rt.mom_pct_change,
+            rt.market_temperature,
+            rt.month_date as last_updated
+        FROM RENTS.ANALYTICS.DIM_LOCATION l
+        JOIN RENTS.MARTS.MART_RENT_TRENDS rt
+            ON l.location_business_key = rt.location_business_key
+        LEFT JOIN RENTS.MARTS.MART_MARKET_RANKINGS mr
+            ON rt.location_business_key = mr.location_business_key
+            AND rt.month_date = mr.month_date
+        WHERE rt.month_date = (SELECT MAX(month_date) FROM RENTS.MARTS.MART_RENT_TRENDS)
+          AND l.latitude IS NOT NULL
+          AND l.longitude IS NOT NULL
+          AND rt.data_quality_score >= 7
+        ORDER BY mr.market_heat_score DESC NULLS LAST
+        """
+    
+    @staticmethod
+    def get_state_rankings(state: str, limit: int = 50) -> str:
+        """Get market rankings for a specific state."""
+        return f"""
+        SELECT 
+            l.location_business_key as metro_id,
+            l.metro_slug,
+            l.location_name as metro_name,
+            l.state_name,
+            rt.rent_value as current_rent,
+            rt.yoy_pct_change,
+            rt.mom_pct_change,
+            rt.market_temperature,
+            l.population,
+            mr.market_heat_score,
+            mr.growth_rank,
+            mr.stability_rank,
+            rt.data_source,
+            rt.month_date as last_updated,
+            RANK() OVER (ORDER BY rt.rent_value DESC) as state_rent_rank,
+            RANK() OVER (ORDER BY rt.yoy_pct_change DESC) as state_growth_rank
+        FROM RENTS.ANALYTICS.DIM_LOCATION l
+        JOIN RENTS.MARTS.MART_RENT_TRENDS rt
+            ON l.location_business_key = rt.location_business_key
+        LEFT JOIN RENTS.MARTS.MART_MARKET_RANKINGS mr
+            ON rt.location_business_key = mr.location_business_key
+            AND rt.month_date = mr.month_date
+        WHERE rt.month_date = (SELECT MAX(month_date) FROM RENTS.MARTS.MART_RENT_TRENDS)
+          AND LOWER(l.state_name) = LOWER('{state}')
+        ORDER BY mr.market_heat_score DESC NULLS LAST, rt.yoy_pct_change DESC
+        LIMIT {limit}
+        """
     
     @staticmethod
     def get_top_rankings(
@@ -395,6 +530,27 @@ class MetaQueries:
         """
     
     @staticmethod
+    def get_freshness_by_source() -> str:
+        """Get data freshness status by source."""
+        return """
+        SELECT 
+            source_name,
+            latest_data_date,
+            latest_load_date,
+            record_count,
+            data_quality_score as avg_quality_score,
+            DATEDIFF(day, latest_data_date, CURRENT_DATE()) as days_since_update,
+            CASE 
+                WHEN DATEDIFF(day, latest_data_date, CURRENT_DATE()) <= 7 THEN 'Fresh'
+                WHEN DATEDIFF(day, latest_data_date, CURRENT_DATE()) <= 14 THEN 'Recent'
+                WHEN DATEDIFF(day, latest_data_date, CURRENT_DATE()) <= 30 THEN 'Aging'
+                ELSE 'Stale'
+            END as freshness_status
+        FROM RENTS.MARTS.MART_DATA_LINEAGE
+        ORDER BY latest_data_date DESC
+        """
+    
+    @staticmethod
     def test_connection() -> str:
         """Simple query to test database connectivity."""
         return "SELECT 1 as test_result, CURRENT_TIMESTAMP() as timestamp"
@@ -414,4 +570,140 @@ class MetaQueries:
         WHERE table_schema IN ('STAGING', 'CORE', 'MARTS')
           AND table_name LIKE 'MART_%'
         ORDER BY table_schema, table_name, ordinal_position
+        """
+
+
+class UserQueries:
+    """SQL queries for user management endpoints (watchlist, alerts)."""
+    
+    @staticmethod
+    def create_user_if_not_exists(user_id: str, email: str) -> str:
+        """Create user if doesn't exist."""
+        return f"""
+        MERGE INTO RENTS.APPLICATION.USERS u
+        USING (SELECT '{user_id}' as user_id, '{email}' as email) s
+        ON u.user_id = s.user_id
+        WHEN NOT MATCHED THEN
+            INSERT (user_id, email) VALUES (s.user_id, s.email)
+        """
+    
+    @staticmethod
+    def add_to_watchlist(user_id: str, location_business_key: str, metro_slug: str) -> str:
+        """Add market to user's watchlist."""
+        return f"""
+        INSERT INTO RENTS.APPLICATION.WATCHLIST (user_id, location_business_key, metro_slug)
+        VALUES ('{user_id}', '{location_business_key}', '{metro_slug}')
+        """
+    
+    @staticmethod
+    def get_watchlist(user_id: str) -> str:
+        """Get user's watchlist with current market data."""
+        return f"""
+        SELECT 
+            w.watchlist_id,
+            w.user_id,
+            l.metro_slug,
+            l.location_name as metro_name,
+            l.state_name,
+            rt.rent_value as current_rent,
+            rt.yoy_pct_change,
+            rt.mom_pct_change,
+            rt.market_temperature,
+            w.added_at
+        FROM RENTS.APPLICATION.WATCHLIST w
+        JOIN RENTS.ANALYTICS.DIM_LOCATION l
+            ON w.location_business_key = l.location_business_key
+        LEFT JOIN RENTS.MARTS.MART_RENT_TRENDS rt
+            ON l.location_business_key = rt.location_business_key
+            AND rt.month_date = (SELECT MAX(month_date) FROM RENTS.MARTS.MART_RENT_TRENDS)
+        WHERE w.user_id = '{user_id}'
+        ORDER BY w.added_at DESC
+        """
+    
+    @staticmethod
+    def remove_from_watchlist(watchlist_id: str) -> str:
+        """Remove item from watchlist."""
+        return f"""
+        DELETE FROM RENTS.APPLICATION.WATCHLIST
+        WHERE watchlist_id = '{watchlist_id}'
+        """
+    
+    @staticmethod
+    def lookup_location_key(metro_slug: str) -> str:
+        """Lookup location_business_key from metro_slug."""
+        return f"""
+        SELECT location_business_key
+        FROM RENTS.ANALYTICS.DIM_LOCATION
+        WHERE metro_slug = '{metro_slug}'
+        LIMIT 1
+        """
+    
+    @staticmethod
+    def create_alert(
+        user_id: str,
+        location_business_key: str,
+        metro_slug: str,
+        alert_type: str,
+        threshold_value: Optional[float],
+        channel: str,
+        cadence: str
+    ) -> str:
+        """Create a price alert."""
+        threshold_str = f"{threshold_value}" if threshold_value is not None else "NULL"
+        return f"""
+        INSERT INTO RENTS.APPLICATION.PRICE_ALERTS 
+        (user_id, location_business_key, metro_slug, alert_type, threshold_value, channel, cadence)
+        VALUES ('{user_id}', '{location_business_key}', '{metro_slug}', '{alert_type}', {threshold_str}, '{channel}', '{cadence}')
+        """
+    
+    @staticmethod
+    def get_alerts(user_id: str) -> str:
+        """Get user's active alerts."""
+        return f"""
+        SELECT 
+            a.alert_id,
+            a.user_id,
+            a.metro_slug,
+            l.location_name as metro_name,
+            a.alert_type,
+            a.threshold_value,
+            a.channel,
+            a.cadence,
+            a.active,
+            a.created_at,
+            a.last_triggered_at
+        FROM RENTS.APPLICATION.PRICE_ALERTS a
+        JOIN RENTS.ANALYTICS.DIM_LOCATION l
+            ON a.location_business_key = l.location_business_key
+        WHERE a.user_id = '{user_id}'
+        ORDER BY a.created_at DESC
+        """
+    
+    @staticmethod
+    def update_alert(alert_id: str, updates: dict) -> str:
+        """Update alert configuration."""
+        set_clauses = []
+        for key, value in updates.items():
+            if isinstance(value, str):
+                set_clauses.append(f"{key} = '{value}'")
+            elif isinstance(value, bool):
+                set_clauses.append(f"{key} = {value}")
+            elif value is not None:
+                set_clauses.append(f"{key} = {value}")
+        
+        if not set_clauses:
+            return None
+            
+        return f"""
+        UPDATE RENTS.APPLICATION.PRICE_ALERTS
+        SET {', '.join(set_clauses)}, updated_at = CURRENT_TIMESTAMP()
+        WHERE alert_id = '{alert_id}'
+        """
+    
+    @staticmethod
+    def delete_alert(alert_id: str) -> str:
+        """Delete an alert."""
+        return f"""
+        DELETE FROM RENTS.APPLICATION.PRICE_ALERTS
+        WHERE alert_id = '{alert_id}'
         """

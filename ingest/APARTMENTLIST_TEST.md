@@ -309,3 +309,4 @@ python ingest/apartmentlist_pull.py
 ```
 
 Once working, it can be integrated into Dagster using the exact same pattern as `zillow_zori_ingestion`.
+

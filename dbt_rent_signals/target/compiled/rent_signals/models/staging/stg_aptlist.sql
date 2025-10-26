@@ -24,7 +24,7 @@ cleaned as (
         
         -- Data quality and lineage
         current_timestamp() as processed_at,
-        '2025-10-26 04:07:02.967691+00:00' as dbt_run_id,
+        '2025-10-26 04:41:04.391014+00:00' as dbt_run_id,
         
         -- Create row hash for change detection
         md5(cast(coalesce(cast(location_fips_code as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(regionid as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(location_name as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(location_type as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(state as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(county as TEXT), '_dbt_utils_surrogate_key_null_') || '-' || coalesce(cast(metro as TEXT), '_dbt_utils_surrogate_key_null_') as TEXT)) as location_business_key,

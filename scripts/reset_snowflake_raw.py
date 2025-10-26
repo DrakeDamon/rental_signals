@@ -85,3 +85,4 @@ print("Next: Load data from S3 bronze or local files")
 cursor.close()
 conn.close()
 
+

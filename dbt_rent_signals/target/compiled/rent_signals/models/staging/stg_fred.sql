@@ -41,7 +41,7 @@ cleaned as (
         
         -- Data quality and lineage
         current_timestamp() as processed_at,
-        '2025-10-26 04:07:02.967691+00:00' as dbt_run_id,
+        '2025-10-26 04:41:04.391014+00:00' as dbt_run_id,
         
         -- Create business key for series
         md5(cast(coalesce(cast(series_id as TEXT), '_dbt_utils_surrogate_key_null_') as TEXT)) as series_business_key,

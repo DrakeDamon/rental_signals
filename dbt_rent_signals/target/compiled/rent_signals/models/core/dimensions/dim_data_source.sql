@@ -49,7 +49,7 @@ dimension_table as (
         -- Metadata
         current_timestamp() as created_at,
         current_timestamp() as updated_at,
-        '2025-10-26 04:07:02.967691+00:00' as dbt_run_id
+        '2025-10-26 04:41:04.391014+00:00' as dbt_run_id
         
     from source_systems
 )

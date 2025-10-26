@@ -21,9 +21,16 @@ from .models import (
     RegionalSummaryResponse, RegionalSummary,
     DataLineageResponse, DataLineageInfo,
     MarketComparisonResponse, MarketComparisonItem,
-    PaginationMetadata, ErrorResponse, DataSource
+    PaginationMetadata, ErrorResponse, DataSource,
+    # New standardized response models
+    StandardAPIResponse, APIMetadata, APIPagination,
+    # User management models
+    WatchlistItemCreate, WatchlistItem, AlertCreate, AlertUpdate, Alert
 )
-from .queries import MarketQueries, PriceQueries, RankingQueries, EconomicQueries, RegionalQueries, MetaQueries
+from .queries import (
+    MarketQueries, PriceQueries, RankingQueries, EconomicQueries, 
+    RegionalQueries, MetaQueries, UserQueries
+)
 from .utils import normalize_metro_slug, normalize_state_name, paginate_results, sanitize_query_param
 
 # Configure structured logging
@@ -58,7 +65,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
-    allow_methods=["GET", "HEAD"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -566,7 +573,366 @@ async def get_schema_info():
         raise HTTPException(status_code=500, detail="Failed to fetch schema information")
 
 
+# ============================================================================
+# NEW ENDPOINTS - Individual Market Details
+# ============================================================================
+
+@app.get("/v1/markets/{metro_slug}")
+async def get_market_details(metro_slug: str):
+    """Get detailed information for a specific market by slug."""
+    try:
+        query = MarketQueries.get_market_by_slug(metro_slug)
+        results = execute_query(query)
+        
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Market not found: {metro_slug}")
+        
+        market_data = results[0]
+        
+        return StandardAPIResponse(
+            success=True,
+            data=market_data,
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=market_data.get('LAST_UPDATED'),
+                sources=[market_data.get('DATA_SOURCE', 'Zillow ZORI')],
+                quality_score=market_data.get('DATA_QUALITY_SCORE')
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching market details", metro_slug=metro_slug, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch market details")
+
+
+@app.get("/v1/prices/featured")
+async def get_featured_markets(limit: int = Query(10, ge=1, le=50)):
+    """Get top featured markets by heat score and growth."""
+    try:
+        query = PriceQueries.get_featured_markets(limit=limit)
+        results = execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('LAST_UPDATED') if results else None,
+                sources=['Zillow ZORI', 'ApartmentList'],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching featured markets", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch featured markets")
+
+
+@app.get("/v1/rankings/state/{state}")
+async def get_state_rankings(state: str, limit: int = Query(50, ge=1, le=100)):
+    """Get market rankings for a specific state."""
+    try:
+        query = RankingQueries.get_state_rankings(state=state, limit=limit)
+        results = execute_query(query)
+        
+        if not results:
+            raise HTTPException(status_code=404, detail=f"No markets found for state: {state}")
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('LAST_UPDATED') if results else None,
+                sources=['Zillow ZORI'],
+                quality_score=None
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching state rankings", state=state, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch state rankings")
+
+
+@app.get("/v1/analytics/heat-map")
+async def get_heat_map_data():
+    """Get market heat scores with geographic coordinates for map visualization."""
+    try:
+        query = RankingQueries.get_heat_map_data()
+        results = execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=results[0].get('LAST_UPDATED') if results else None,
+                sources=['Zillow ZORI', 'ApartmentList'],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching heat map data", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch heat map data")
+
+
+@app.get("/v1/data/freshness")
+async def get_data_freshness():
+    """Get data freshness status by source."""
+    try:
+        query = MetaQueries.get_freshness_by_source()
+        results = execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=datetime.utcnow(),
+                sources=[r.get('SOURCE_NAME') for r in results],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching data freshness", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch data freshness")
+
+
+# ============================================================================
+# USER MANAGEMENT ENDPOINTS - Watchlist
+# ============================================================================
+
+@app.post("/v1/watchlist")
+async def add_to_watchlist(item: WatchlistItemCreate):
+    """Add a market to user's watchlist."""
+    try:
+        # Lookup location_business_key from metro_slug
+        lookup_query = UserQueries.lookup_location_key(item.metro_slug)
+        location_results = execute_query(lookup_query)
+        
+        if not location_results:
+            raise HTTPException(status_code=404, detail=f"Market not found: {item.metro_slug}")
+        
+        location_key = location_results[0]['LOCATION_BUSINESS_KEY']
+        
+        # Add to watchlist
+        insert_query = UserQueries.add_to_watchlist(
+            user_id=item.user_id,
+            location_business_key=location_key,
+            metro_slug=item.metro_slug
+        )
+        execute_query(insert_query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data={"message": "Added to watchlist successfully", "metro_slug": item.metro_slug},
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error adding to watchlist", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to add to watchlist")
+
+
+@app.get("/v1/watchlist")
+async def get_watchlist(user_id: str = Query(..., description="User ID")):
+    """Get user's watchlist with current market data."""
+    try:
+        query = UserQueries.get_watchlist(user_id=user_id)
+        results = execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=datetime.utcnow(),
+                sources=['Zillow ZORI'],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching watchlist", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch watchlist")
+
+
+@app.delete("/v1/watchlist/{watchlist_id}")
+async def remove_from_watchlist(watchlist_id: str):
+    """Remove item from watchlist."""
+    try:
+        query = UserQueries.remove_from_watchlist(watchlist_id=watchlist_id)
+        execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data={"message": "Removed from watchlist successfully"},
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error removing from watchlist", watchlist_id=watchlist_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to remove from watchlist")
+
+
+# ============================================================================
+# USER MANAGEMENT ENDPOINTS - Alerts
+# ============================================================================
+
+@app.post("/v1/alerts")
+async def create_alert(alert: AlertCreate):
+    """Create a price alert for a market."""
+    try:
+        # Lookup location_business_key
+        lookup_query = UserQueries.lookup_location_key(alert.metro_slug)
+        location_results = execute_query(lookup_query)
+        
+        if not location_results:
+            raise HTTPException(status_code=404, detail=f"Market not found: {alert.metro_slug}")
+        
+        location_key = location_results[0]['LOCATION_BUSINESS_KEY']
+        
+        # Create alert
+        insert_query = UserQueries.create_alert(
+            user_id=alert.user_id,
+            location_business_key=location_key,
+            metro_slug=alert.metro_slug,
+            alert_type=alert.alert_type,
+            threshold_value=alert.threshold_value,
+            channel=alert.channel,
+            cadence=alert.cadence
+        )
+        execute_query(insert_query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data={"message": "Alert created successfully", "metro_slug": alert.metro_slug},
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error creating alert", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create alert")
+
+
+@app.get("/v1/alerts")
+async def get_alerts(user_id: str = Query(..., description="User ID")):
+    """Get user's active alerts."""
+    try:
+        query = UserQueries.get_alerts(user_id=user_id)
+        results = execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data=results,
+            metadata=APIMetadata(
+                total_count=len(results),
+                returned_count=len(results),
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching alerts", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch alerts")
+
+
+@app.put("/v1/alerts/{alert_id}")
+async def update_alert(alert_id: str, update: AlertUpdate):
+    """Update alert configuration."""
+    try:
+        updates = update.dict(exclude_unset=True)
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
+        
+        query = UserQueries.update_alert(alert_id=alert_id, updates=updates)
+        if query:
+            execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data={"message": "Alert updated successfully", "alert_id": alert_id},
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating alert", alert_id=alert_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to update alert")
+
+
+@app.delete("/v1/alerts/{alert_id}")
+async def delete_alert(alert_id: str):
+    """Delete an alert."""
+    try:
+        query = UserQueries.delete_alert(alert_id=alert_id)
+        execute_query(query)
+        
+        return StandardAPIResponse(
+            success=True,
+            data={"message": "Alert deleted successfully"},
+            metadata=APIMetadata(
+                total_count=1,
+                returned_count=1,
+                data_freshness=datetime.utcnow(),
+                sources=[],
+                quality_score=None
+            )
+        )
+        
+    except Exception as e:
+        logger.error("Error deleting alert", alert_id=alert_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to delete alert")
+
+
+# ============================================================================
 # Root endpoint
+# ============================================================================
+
 @app.get("/")
 async def root():
     """API root endpoint with basic information."""
@@ -578,11 +944,18 @@ async def root():
         "health_check": "/v1/health",
         "endpoints": {
             "markets": "/v1/markets",
+            "market_details": "/v1/markets/{metro_slug}",
+            "featured_markets": "/v1/prices/featured",
             "price_drops": "/v1/prices/drops",
             "rankings": "/v1/rankings/top",
+            "state_rankings": "/v1/rankings/state/{state}",
+            "heat_map": "/v1/analytics/heat-map",
             "economic_analysis": "/v1/economics/correlation",
             "regional_summary": "/v1/regional/summary",
-            "data_lineage": "/v1/data/lineage"
+            "data_lineage": "/v1/data/lineage",
+            "data_freshness": "/v1/data/freshness",
+            "watchlist": "/v1/watchlist",
+            "alerts": "/v1/alerts"
         }
     }
 

@@ -183,7 +183,7 @@ calendar_attributes as (
         
         -- Data lineage
         current_timestamp() as created_at,
-        '2025-10-26 04:07:02.967691+00:00' as dbt_run_id
+        '2025-10-26 04:41:04.391014+00:00' as dbt_run_id
         
     from date_spine
 )

@@ -42,3 +42,4 @@ for table in tables:
 cursor.close()
 conn.close()
 
+

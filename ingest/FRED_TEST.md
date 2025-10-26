@@ -313,3 +313,4 @@ def fred_tampa_rent_ingestion(
 - ApartmentList: ❌ **Needs debugging** (button selector issue)
 
 **Recommendation**: Get the FRED API key now, test it, and you'll have 2 out of 3 sources working within 5 minutes!
+

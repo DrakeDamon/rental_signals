@@ -337,3 +337,4 @@ The Zillow scraper alone provides valuable Tampa rent data (10+ years, monthly u
 - ✅ `ingest/ENV.md` - Environment configuration
 - ✅ `ingest/INTEGRATION_SUMMARY.md` - Architecture
 - ✅ `ingest/SCRAPER_COMPARISON.md` - This file
+

@@ -278,3 +278,4 @@ schedule:
 - [ ] GitHub Actions secrets configured (if using CI/CD)
 
 Once all items are checked, your ingestion pipeline is ready for production! 🎉
+

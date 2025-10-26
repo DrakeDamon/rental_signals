@@ -130,3 +130,4 @@ class S3Resource(ConfigurableResource):
         s3_key = f"{source}/{layer}/date={date}/{filename}"
         return self.upload_file(local_path, s3_key)
 
+

@@ -4,9 +4,38 @@ Defines data structures for type-safe API responses and validation.
 """
 
 from datetime import date, datetime
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Generic, TypeVar
 from pydantic import BaseModel, Field, validator
+from pydantic.generics import GenericModel
 from enum import Enum
+
+
+# Generic type for data payload
+T = TypeVar('T')
+
+
+class APIMetadata(BaseModel):
+    """Metadata for standardized API responses."""
+    total_count: int = Field(..., description="Total number of items available")
+    returned_count: int = Field(..., description="Number of items returned in this response")
+    data_freshness: Optional[datetime] = Field(None, description="Timestamp of most recent data")
+    sources: List[str] = Field(..., description="Data sources used in response")
+    quality_score: Optional[float] = Field(None, description="Average data quality score (1-10)")
+
+
+class APIPagination(BaseModel):
+    """Pagination information for standardized API responses."""
+    limit: int = Field(..., description="Maximum number of items per page")
+    offset: int = Field(..., description="Starting position in result set")
+    has_more: bool = Field(..., description="Whether more results are available")
+
+
+class StandardAPIResponse(GenericModel, Generic[T]):
+    """Standardized API response wrapper for all endpoints."""
+    success: bool = Field(True, description="Whether the request was successful")
+    data: T = Field(..., description="Response data payload")
+    metadata: APIMetadata = Field(..., description="Response metadata")
+    pagination: Optional[APIPagination] = Field(None, description="Pagination information (if applicable)")
 
 
 class DataSource(str, Enum):
@@ -53,6 +82,8 @@ class HealthStatus(BaseModel):
 
 class MarketSummary(BaseModel):
     """Summary information for a rental market."""
+    metro_id: str = Field(..., description="Location business key (unique identifier)")
+    metro_slug: Optional[str] = Field(None, description="URL-friendly metro slug")
     metro_name: str = Field(..., description="Metro area name")
     state_name: str = Field(..., description="State name")
     current_rent: Optional[float] = Field(None, description="Current average rent")
@@ -62,11 +93,17 @@ class MarketSummary(BaseModel):
     market_size_category: Optional[MarketSizeCategory] = Field(None, description="Market size category")
     population: Optional[int] = Field(None, description="Metro area population")
     data_source: DataSource = Field(..., description="Data source")
+    lat: Optional[float] = Field(None, description="Latitude coordinate for map display")
+    lng: Optional[float] = Field(None, description="Longitude coordinate for map display")
+    last_updated: Optional[date] = Field(None, description="Date of most recent data")
     
-    @validator('current_rent', 'yoy_pct_change', 'mom_pct_change')
+    @validator('current_rent', 'yoy_pct_change', 'mom_pct_change', 'lat', 'lng')
     def round_floats(cls, v):
-        """Round float values to 2 decimal places."""
-        return round(v, 2) if v is not None else None
+        """Round float values to appropriate decimal places."""
+        if v is None:
+            return None
+        # Round lat/lng to 4 decimals, currency to 2
+        return round(v, 4) if isinstance(v, float) and abs(v) < 200 else round(v, 2)
 
 
 class TrendDataPoint(BaseModel):
@@ -230,3 +267,61 @@ class ErrorResponse(BaseModel):
     message: str = Field(..., description="Error message")
     details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Error timestamp")
+
+
+# ============================================================================
+# User Management Models
+# ============================================================================
+
+class WatchlistItemCreate(BaseModel):
+    """Request model for adding item to watchlist."""
+    user_id: str = Field(..., description="User ID")
+    metro_slug: str = Field(..., description="Metro slug to add to watchlist")
+
+
+class WatchlistItem(BaseModel):
+    """Response model for watchlist item."""
+    watchlist_id: str = Field(..., description="Watchlist item ID")
+    user_id: str = Field(..., description="User ID")
+    metro_slug: Optional[str] = Field(None, description="Metro slug")
+    metro_name: str = Field(..., description="Metro name")
+    state_name: str = Field(..., description="State name")
+    current_rent: Optional[float] = Field(None, description="Current rent value")
+    yoy_pct_change: Optional[float] = Field(None, description="YoY change")
+    mom_pct_change: Optional[float] = Field(None, description="MoM change")
+    market_temperature: Optional[str] = Field(None, description="Market temperature")
+    added_at: datetime = Field(..., description="Date added to watchlist")
+
+
+class AlertCreate(BaseModel):
+    """Request model for creating a price alert."""
+    user_id: str = Field(..., description="User ID")
+    metro_slug: str = Field(..., description="Metro slug for alert")
+    alert_type: str = Field(..., description="Alert type: 'price_drop', 'threshold', 'trend'")
+    threshold_value: Optional[float] = Field(None, description="Threshold value for alert (optional)")
+    channel: str = Field("email", description="Notification channel: 'email' or 'sms'")
+    cadence: str = Field("daily", description="Alert frequency: 'immediate', 'daily', 'weekly'")
+
+
+class AlertUpdate(BaseModel):
+    """Request model for updating a price alert."""
+    alert_type: Optional[str] = Field(None, description="Alert type")
+    threshold_value: Optional[float] = Field(None, description="Threshold value")
+    channel: Optional[str] = Field(None, description="Notification channel")
+    cadence: Optional[str] = Field(None, description="Alert frequency")
+    active: Optional[bool] = Field(None, description="Whether alert is active")
+
+
+class Alert(BaseModel):
+    """Response model for price alert."""
+    alert_id: str = Field(..., description="Alert ID")
+    user_id: str = Field(..., description="User ID")
+    metro_slug: Optional[str] = Field(None, description="Metro slug")
+    metro_name: str = Field(..., description="Metro name")
+    alert_type: str = Field(..., description="Alert type")
+    threshold_value: Optional[float] = Field(None, description="Threshold value")
+    channel: str = Field(..., description="Notification channel")
+    cadence: str = Field(..., description="Alert frequency")
+    active: bool = Field(..., description="Whether alert is active")
+    created_at: datetime = Field(..., description="Alert creation date")
+    last_triggered_at: Optional[datetime] = Field(None, description="Last trigger date")
