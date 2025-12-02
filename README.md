@@ -1,3 +1,12 @@
+# 🏢 LeaseRadar Analytics Platform
+> Project Owner: Sono Global Venture LLC
+> Role: Founder & Lead Engineer
+> Status: Active Product Development
+> Development Period: Feb 2025 - Present
+
+## 🏢 Business Context
+LeaseRadar is a data-driven SaaS product developed by Sono Global Venture. It provides real-time rental market intelligence to property investors via subscription API.
+
 # Tampa Rent Signals Data Pipeline
 
 A modern, production-ready data engineering pipeline for collecting, processing, and analyzing rental market data from multiple sources. The system integrates data from Zillow, ApartmentList, and Federal Reserve Economic Data (FRED) using **dbt Core**, **Great Expectations**, and **Dagster** with Snowflake as the cloud data warehouse.
